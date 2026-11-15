@@ -35,6 +35,19 @@ def verify_revision(connection, config):
         raise RuntimeError("Database migrations are pending; refusing API activation")
 
 
+def migration_status(connection, config, require_current=False):
+    scripts = ScriptDirectory.from_config(config)
+    heads = tuple(scripts.get_heads())
+    current = MigrationContext.configure(connection).get_current_heads()
+    if len(heads) != 1:
+        raise RuntimeError("Exactly one Alembic head is required")
+    pending = list(scripts.iterate_revisions(heads, current))
+    print(f"Schema revisions: current={','.join(current) or 'base'}; head={heads[0]}; "
+          f"pending={len(pending)}", flush=True)
+    if require_current:
+        verify_revision(connection, config)
+
+
 def check_connection(connection):
     if not connection.scalar(text("SELECT VERSION()")).startswith("8.4."):
         raise RuntimeError("MySQL 8.4 is required")
@@ -65,8 +78,10 @@ def migrate():
                 if len(ScriptDirectory.from_config(config).get_heads()) != 1:
                     raise RuntimeError("Exactly one Alembic head is required")
                 config.attributes["connection"] = connection
+                migration_status(connection, config)
                 command.upgrade(config, "head")
                 verify_revision(connection, config)
+                migration_status(connection, config, require_current=True)
                 print("Production migrations completed and revision verified", flush=True)
             finally:
                 connection.execute(text("SELECT RELEASE_LOCK(:name)"), {"name": LOCK_NAME})

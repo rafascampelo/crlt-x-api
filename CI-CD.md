@@ -1,11 +1,19 @@
 # CI/CD do backend: GitHub Actions e Railway
 
+## Job exclusivo de Database Migrations
+
+O fluxo de produção é **validate → database-migrations → production**.
+O serviço privado **ctrl-x-migrations** executa Alembic no pre-deploy antes de
+liberar o job da API. A API apenas verifica o schema, sem aplicar migrations.
+Configure `RAILWAY_MIGRATIONS_SERVICE_ID` e o serviço adicional antes de ativar
+esse fluxo. Veja [comandos, configuração e recuperação](docs/database-migrations.md).
+
 ## Fluxo e arquivos
 
 `push feature/*` → CI → PR para `develop` → CI do PR e revisão humana → auto-merge
 → CI de `develop` → PR para `prod` → CI do PR e revisão humana → auto-merge
 → push em `prod` → CI completa novamente → aprovação de `production`
-→ Railway pre-deploy → ativação da API → smoke HTTP.
+→ pre-deploy de ctrl-x-migrations → validação do schema da API → ativação → smoke HTTP.
 
 - `.github/workflows/backend.yml`: CI reutilizável, Ruff, pytest, MySQL 8.4 isolado,
   Alembic, build Docker e smoke em configuração de produção.
@@ -16,7 +24,10 @@
   de uma feature com acesso ao token de automação.
 - `.github/rulesets/{develop,prod}.json`: regras prontas para importar; precisam
   ser ativadas no GitHub para bloquear pushes diretos.
-- `railway.json`: Dockerfile, pre-deploy controlado e healthcheck `/health`.
+- `railway.json`: Dockerfile, pre-deploy de verificação e healthcheck `/health`.
+- `scripts/deploy_migrations.py`: pacote privado e acompanhamento do deployment
+  exclusivo de migrations, usando o mesmo código/SHA validado da API.
+- `scripts/db.py`: comandos de migrate/status/create e rollback local.
 - `scripts/migrate_production.py`: conexão privada, versão MySQL, lock e upgrade.
 - `scripts/start_api.py`: valida configuração/schema e faz exec do Uvicorn.
 - `scripts/deploy_railway.py`: valida destino, envia fonte, acompanha o ID exato
@@ -104,6 +115,7 @@ e revoga ao terminar. Não colocar chave privada em código, logs ou Railway.
 | Environment secret production | `RAILWAY_TOKEN` | Project token do projeto/environment de produção |
 | Environment variable production | `RAILWAY_PROJECT_ID` | UUID do projeto |
 | Environment variable production | `RAILWAY_SERVICE_ID` | UUID de ctrl-x-api, nunca MySQL |
+| Environment variable production | `RAILWAY_MIGRATIONS_SERVICE_ID` | UUID de ctrl-x-migrations |
 | Environment variable production | `RAILWAY_ENVIRONMENT_ID` | UUID do environment chamado production |
 | Environment variable production | `BACKEND_PRODUCTION_URL` | Base HTTPS pública da API, sem path/query/credenciais |
 
@@ -137,8 +149,8 @@ No mesmo projeto/environment production, após autorização de custos:
    desativa autodeploy. Apenas Actions/CLI deve enviar código. Não sobrescrever
    Start Command: o CMD usa scripts.start_api, usuário 10001, `0.0.0.0:$PORT`,
    sem reload e com exec para sinais/encerramento adequados.
-3. `railway.json` na raiz enviada: builder Dockerfile, pre-deploy
-   `python -m scripts.migrate_production`, healthcheck /health e timeout 300s.
+3. `railway.json` na raiz enviada à API: builder Dockerfile, pre-deploy
+   `python -m scripts.db db:status --require-current`, healthcheck /health e timeout 300s.
    Conferir no deployment se a configuração foi lida. Definir **Pre-deploy
    Timeout** finito no painel, por exemplo 600s ajustado à revisão. Não presumir
    timeout padrão nem inventar um campo JSON não suportado.
@@ -206,7 +218,8 @@ definir armazenamento privado persistente, permissões e backup; o diretório
 
 ## Migrations, compatibilidade e recuperação
 
-Após CI/build, Railway roda pre-deploy da nova imagem com Variables e rede privada.
+Após CI/build, o job database-migrations envia a nova imagem ao serviço privado
+ctrl-x-migrations. Railway roda seu pre-deploy com Variables e rede privada.
 O script valida MySQL 8.4, adquire GET_LOCK e executa Alembic upgrade head na
 **mesma conexão** que mantém o lock. Recusa múltiplos heads e confere revisão final.
 Libera lock ao terminar/fechar conexão. Falha sai não zero e impede ativação;
