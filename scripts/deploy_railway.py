@@ -5,12 +5,42 @@ import os
 import re
 import subprocess
 import time
+from pathlib import Path
 from urllib.error import URLError
 from urllib.parse import urlsplit
 from urllib.request import urlopen
 
 UUID = r"[0-9a-fA-F]{8}(?:-[0-9a-fA-F]{4}){3}-[0-9a-fA-F]{12}"
 PENDING = {"INITIALIZING", "QUEUED", "WAITING", "BUILDING", "DEPLOYING"}
+
+
+def validate_base_url(base_url: str):
+    parsed = urlsplit(base_url)
+    if (parsed.scheme != "https" or not parsed.hostname or parsed.username or parsed.password
+            or parsed.query or parsed.fragment or parsed.path not in ("", "/")
+            or parsed.port not in (None, 443)):
+        raise ValueError("BACKEND_PRODUCTION_URL must be a public HTTPS base URL")
+
+
+def validate_release_config():
+    config = json.loads(Path("railway.json").read_text(encoding="utf-8"))
+    if (config.get("build", {}).get("builder") != "DOCKERFILE"
+            or config.get("deploy", {}).get("preDeployCommand") != [
+                "python -m scripts.migrate_production"
+            ] or config.get("deploy", {}).get("healthcheckPath") != "/health"):
+        raise ValueError("Release must include the controlled migration and healthcheck configuration")
+
+
+def verify_api_target(project: str, service: str, environment: str):
+    metadata = json.loads(railway("status", "--project", project,
+                                  "--environment", environment, "--json"))
+    services = [edge["node"] for edge in metadata["services"]["edges"]]
+    environments = [edge["node"] for edge in metadata["environments"]["edges"]]
+    if (metadata["id"] != project
+            or not any(item["id"] == service and item["name"] == "ctrl-x-api" for item in services)
+            or not any(item["id"] == environment and item["name"] == "production"
+                       for item in environments)):
+        raise RuntimeError("Refusing deploy outside ctrl-x-api in the production environment")
 
 
 def railway(*args: str) -> str:
@@ -51,9 +81,7 @@ def wait_for_deployment(deployment_id: str, service: str, environment: str) -> N
 
 
 def check_health(base_url: str) -> None:
-    parsed = urlsplit(base_url)
-    if parsed.scheme != "https" or not parsed.hostname or parsed.username or parsed.query:
-        raise ValueError("BACKEND_PRODUCTION_URL must be a public HTTPS base URL")
+    validate_base_url(base_url)
     for attempt in range(30):
         try:
             with urlopen(base_url.rstrip("/") + "/health", timeout=5) as response:
@@ -86,9 +114,9 @@ def main() -> None:
             raise ValueError("Railway project, service and environment must be UUIDs")
     base_url = os.environ["BACKEND_PRODUCTION_URL"]
     # Validate configuration before making any remote change.
-    parsed = urlsplit(base_url)
-    if parsed.scheme != "https" or not parsed.hostname or parsed.username or parsed.query:
-        raise ValueError("BACKEND_PRODUCTION_URL must be a public HTTPS base URL")
+    validate_base_url(base_url)
+    validate_release_config()
+    verify_api_target(project, service, environment)
     railway("link", "--project", project, "--environment", environment, "--service", service)
     output = railway(
         "up", "--detach", "--json", "--service", service, "--environment", environment

@@ -9,5 +9,9 @@
 !scripts/
 !scripts/__init__.py
 !scripts/ci_database.py
+!scripts/migrate_production.py
+!scripts/start_api.py
 **/__pycache__
 **/*.pyc
+**/.env
+**/.env.*

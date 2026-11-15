@@ -1,11 +1,12 @@
-name: Backend CI-CD
+name: Backend CI
 
 on:
   pull_request:
     branches: [develop, prod]
     types: [opened, synchronize, reopened, edited, ready_for_review]
   push:
-    branches: [develop, prod]
+    branches: ['feature/**', develop]
+  workflow_call:
 
 permissions:
   contents: read
@@ -15,6 +16,17 @@ concurrency:
   cancel-in-progress: ${{ github.ref != 'refs/heads/prod' }}
 
 jobs:
+  branch-policy:
+    name: Branch policy
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          persist-credentials: false
+      - name: Enforce feature to develop and develop to prod
+        run: python -m scripts.branch_policy
+
   ci:
     name: Backend CI
     runs-on: ubuntu-24.04
@@ -52,6 +64,12 @@ jobs:
         run: |
           python -m pip install -r requirements.lock
           python -m pip check
+      - name: Validate workflow syntax and shell commands
+        run: >-
+          docker run --rm --volume "$PWD/.github:/repo/.github:ro" --workdir /repo
+          rhysd/actionlint:1.7.7@sha256:887a259a5a534f3c4f36cb02dca341673c6089431057242cdc931e9f133147e9
+          /repo/.github/workflows/backend.yml /repo/.github/workflows/deploy-production.yml
+          /repo/.github/workflows/auto-promote.yml
       - name: Ruff
         run: python -m ruff check .
       - name: Validate isolated database target
@@ -73,8 +91,12 @@ jobs:
         run: |
           set -euo pipefail
           docker run --rm --entrypoint python "$IMAGE" -c "import pytesseract; assert {'por','eng'} <= set(pytesseract.get_languages())"
-          docker run --detach --name ctrlx-smoke --publish 127.0.0.1:8000:8080 --env PORT=8080 "$IMAGE"
-          for attempt in $(seq 1 30); do
+          docker run --detach --name ctrlx-smoke --publish 127.0.0.1:8000:8080 \
+            --add-host mysql-ci.railway.internal:host-gateway --env PORT=8080 \
+            --env APP_ENV=production --env SECRET_KEY=synthetic-ci-secret-not-for-production-123456 \
+            --env CORS_ORIGINS=https://frontend.example.test \
+            --env DATABASE_URL=mysql+pymysql://ctrlx_ci:ci_only_password@mysql-ci.railway.internal:3306/ctrlx_ci "$IMAGE"
+          for _ in $(seq 1 30); do
             state=$(docker inspect --format '{{json .State.Health.Status}}' ctrlx-smoke)
             if [ "$state" = '"healthy"' ]; then
               python -c "import json,urllib.request; r=urllib.request.urlopen('http://127.0.0.1:8000/health',timeout=5); assert r.status==200 and json.load(r)=={'status':'ok'}"
@@ -101,7 +123,7 @@ jobs:
       - name: Package validated release source
         if: github.event_name == 'push' && github.ref == 'refs/heads/prod'
         run: |
-          tar --exclude='__pycache__' --exclude='*.pyc' -czf release.tar.gz Dockerfile .dockerignore .railwayignore requirements.lock app alembic alembic.ini scripts
+          tar --exclude='__pycache__' --exclude='*.pyc' -czf release.tar.gz Dockerfile .dockerignore .railwayignore railway.json requirements.lock app alembic alembic.ini scripts
           sha256sum release.tar.gz > release.tar.gz.sha256
       - name: Save release source
         if: github.event_name == 'push' && github.ref == 'refs/heads/prod'
@@ -113,50 +135,3 @@ jobs:
             release.tar.gz.sha256
           if-no-files-found: error
           retention-days: 7
-
-  production:
-    name: Backend production
-    needs: ci
-    if: github.event_name == 'push' && github.ref == 'refs/heads/prod'
-    runs-on: ubuntu-24.04
-    timeout-minutes: 25
-    environment:
-      name: production
-      url: ${{ vars.BACKEND_PRODUCTION_URL }}
-    concurrency:
-      group: backend-production
-      cancel-in-progress: false
-    steps:
-      - name: Reject superseded release
-        env:
-          GH_TOKEN: ${{ github.token }}
-          EXPECTED_SHA: ${{ github.sha }}
-        run: |
-          set -euo pipefail
-          current=$(gh api "repos/$GITHUB_REPOSITORY/git/ref/heads/prod" --jq '.object.sha')
-          test "$current" = "$EXPECTED_SHA" || { echo '::error::prod has advanced; refusing stale release'; exit 1; }
-      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
-        with:
-          name: backend-release-${{ github.sha }}
-      - name: Verify and extract validated source
-        run: |
-          sha256sum --check release.tar.gz.sha256
-          mkdir release
-          tar -xzf release.tar.gz -C release
-      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5.6.0
-        with:
-          python-version: '3.12'
-      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
-        with:
-          node-version: '22'
-      - name: Install pinned Railway CLI
-        run: npm install --global @railway/cli@5.74.0
-      - name: Deploy and verify production
-        working-directory: release
-        env:
-          RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
-          RAILWAY_PROJECT_ID: ${{ vars.RAILWAY_PROJECT_ID }}
-          RAILWAY_SERVICE_ID: ${{ vars.RAILWAY_SERVICE_ID }}
-          RAILWAY_ENVIRONMENT_ID: ${{ vars.RAILWAY_ENVIRONMENT_ID }}
-          BACKEND_PRODUCTION_URL: ${{ vars.BACKEND_PRODUCTION_URL }}
-        run: python -m scripts.deploy_railway

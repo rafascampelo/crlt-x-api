@@ -129,6 +129,12 @@ no Railway.
 
 Pipeline do backend: [CI-CD.md](CI-CD.md). PRs e `develop` executam somente CI;
 push em `prod` publica via Railway apenas após CI e proteção do Environment.
+O deploy usa `.github/workflows/deploy-production.yml` e `railway.json`, com
+Alembic no pre-deploy e verificação de revisão antes de iniciar cada réplica.
+Automação de PR/auto-merge de feature → develop → prod aguarda checks e revisões.
+Os rulesets em `.github/rulesets/` precisam ser importados/ativados no GitHub
+para bloquear pushes diretos. App, secrets, revisores e serviços Railway ainda
+exigem configuração manual autorizada; os arquivos locais não alteram essas contas.
 As migrações agora estão inicializadas; defina `DATABASE_URL` antes de executar
 `python -m alembic upgrade head`. `0002_users` cria usuários e perfis;
 `0003_auth_state` cria sessões, limites e auditoria.
