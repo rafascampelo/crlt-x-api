@@ -1,5 +1,33 @@
 # Ctrl X Backend
 
+## Autenticação
+
+Configure `DATABASE_URL`, `SECRET_KEY` aleatória (mínimo 32 caracteres),
+`JWT_ISSUER`, `JWT_AUDIENCE` e `CORS_ORIGINS` (origens explícitas separadas por
+vírgula) no ambiente; execute `python -m alembic upgrade head` antes de iniciar.
+Defina `APP_ENV=production` em produção e use HTTPS.
+
+`POST /api/v1/auth/register` recebe, por exemplo:
+
+```json
+{"email":"person@example.test","password":"fake-password-123","full_name":"Fake Person","role":"PATIENT"}
+```
+
+O papel também pode ser `PROFESSIONAL`. Resposta 201: `{"id":"<uuid>",
+"email":"person@example.test","role":"PATIENT"}`. Email duplicado retorna
+409 e payload inválido 422. A senha exige 12 a 128 caracteres e não é retornada.
+
+`POST /api/v1/auth/login` recebe email e senha e responde com os dados públicos
+do usuário. O navegador deve enviar `Origin` de `CORS_ORIGINS` e usar
+`credentials: "include"`. O servidor emite cookie HttpOnly, SameSite=Lax,
+Secure fora de desenvolvimento, válido por 15 minutos. `GET /api/v1/auth/me`
+retorna o usuário da sessão; token ausente, inválido ou expirado retorna 401.
+Não armazene tokens no localStorage. Não há refresh token: ao expirar, o usuário
+precisa entrar novamente. Em produção, frontend e API devem compartilhar o mesmo
+site para SameSite=Lax; operações futuras autenticadas que alterem dados devem
+verificar Origin e implementar proteção CSRF apropriada. Revogação antecipada de
+tokens e limitação de tentativas ainda precisam ser implementadas.
+
 ## Fluxo de desenvolvimento
 
 Fluxo obrigatório: `feature/<nome-em-kebab-case>` → PR para `develop` → PR de

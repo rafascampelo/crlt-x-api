@@ -1,1 +1,5 @@
-"""Import every ORM model here so Alembic can detect schema drift."""
+"""Register ORM models for Alembic."""
+
+from app.models.user import Patient, Professional, Role, User
+
+__all__ = ["Patient", "Professional", "Role", "User"]
