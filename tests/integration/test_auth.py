@@ -14,6 +14,7 @@ from app.core.security import COOKIE_NAME, require_role
 from app.db.base import Base
 from app.db.session import get_db
 from app.main import app
+from app.models.auth import AuthEvent, AuthSession, LoginLimit
 from app.models.user import Patient, Professional, Role, User
 from scripts.ci_database import validate_ci_database
 
@@ -46,7 +47,7 @@ def client(monkeypatch):
         yield test_client
     app.dependency_overrides.clear()
     with Session(engine) as db:
-        for model in (Patient, Professional, User):
+        for model in (AuthEvent, AuthSession, LoginLimit, Patient, Professional, User):
             db.execute(delete(model))
         db.commit()
     engine.dispose()
@@ -54,7 +55,7 @@ def client(monkeypatch):
 
 
 def register(client, role="PATIENT", email=" User@Example.test "):
-    return client.post("/api/v1/auth/register", json={
+    return client.post("/api/v1/auth/register", headers=ORIGIN, json={
         "email": email, "password": PASSWORD, "full_name": "Fake Person", "role": role,
     })
 
@@ -79,7 +80,7 @@ def test_invalid_credentials_and_origin(client):
     data = {"email": "user@example.test", "password": "incorrect-password"}
     assert client.post("/api/v1/auth/login", headers=ORIGIN, json=data).status_code == 401
     assert client.post("/api/v1/auth/login", json=data).status_code == 403
-    invalid = client.post("/api/v1/auth/register", json={"password": "short"})
+    invalid = client.post("/api/v1/auth/register", headers=ORIGIN, json={"password": "short"})
     assert invalid.status_code == 422
     assert "short" not in invalid.text
 
@@ -109,3 +110,179 @@ def test_role_dependency_rejects_wrong_role(client):
     )
     with TestClient(router, base_url="https://testserver", cookies=client.cookies) as role_client:
         assert role_client.get("/professional").status_code == 403
+
+
+def login(client, password=PASSWORD):
+    return client.post('/api/v1/auth/login', headers=ORIGIN,
+                       json={'email': 'user@example.test', 'password': password})
+
+
+def test_logout_revokes_unexpired_jwt_and_is_idempotent(client):
+    register(client)
+    assert login(client).status_code == 200
+    token = client.cookies.get(COOKIE_NAME)
+    assert client.get('/api/v1/auth/me').status_code == 200
+    response = client.post('/api/v1/auth/logout', headers=ORIGIN)
+    assert response.status_code == 204
+    assert response.content == b''
+    assert 'Max-Age=0' in response.headers['set-cookie']
+    assert 'HttpOnly' in response.headers['set-cookie']
+    assert 'Secure' in response.headers['set-cookie']
+    assert response.headers['cache-control'] == 'no-store'
+    assert client.get('/api/v1/auth/me').status_code == 401
+    client.cookies.set(COOKIE_NAME, token)
+    assert client.get('/api/v1/auth/me').status_code == 401
+    assert client.post('/api/v1/auth/logout', headers=ORIGIN).status_code == 204
+
+
+def test_logout_preserves_other_session(client):
+    register(client)
+    login(client)
+    first = client.cookies.get(COOKIE_NAME)
+    login(client)
+    second = client.cookies.get(COOKIE_NAME)
+    assert first != second
+    client.post('/api/v1/auth/logout', headers=ORIGIN)
+    client.cookies.set(COOKIE_NAME, first)
+    assert client.get('/api/v1/auth/me').status_code == 200
+
+
+@pytest.mark.parametrize('origin', [None, 'null', 'https://evil.example',
+                                   'http://localhost:3000.evil.example'])
+def test_csrf_rejects_mutations(client, origin):
+    register(client)
+    login(client)
+    headers = {} if origin is None else {'Origin': origin}
+    assert client.post('/api/v1/auth/logout', headers=headers).status_code == 403
+    assert client.get('/api/v1/auth/me').status_code == 200
+    assert client.post('/api/v1/auth/login', headers=headers,
+                       json={'email': 'user@example.test', 'password': PASSWORD}).status_code == 403
+    assert client.post('/api/v1/auth/register', headers=headers, json={}).status_code == 403
+
+
+def test_login_limit_and_recovery(client):
+    register(client)
+    for _ in range(5):
+        assert login(client, 'wrong-password-123').status_code == 401
+    response = login(client)
+    assert response.status_code == 429
+    assert 1 <= int(response.headers['retry-after']) <= 300
+    # A new HTTP client shares the same database-backed limit.
+    with TestClient(app, base_url='https://testserver') as other:
+        assert login(other).status_code == 429
+    with next(app.dependency_overrides[get_db]()) as db:
+        from sqlalchemy import update
+        db.execute(update(LoginLimit).values(window_start=datetime.now(UTC) - timedelta(seconds=301)))
+        db.commit()
+    assert login(client).status_code == 200
+
+
+def test_unknown_account_is_limited_and_accounts_are_independent(client):
+    for _ in range(5):
+        assert login(client).status_code == 401
+    assert login(client).status_code == 429
+    register(client, email='other@example.test')
+    assert client.post('/api/v1/auth/login', headers=ORIGIN,
+                       json={'email': 'other@example.test', 'password': PASSWORD}).status_code == 200
+
+
+def test_expiration_and_session_binding(client):
+    register(client)
+    login(client)
+    token = client.cookies.get(COOKIE_NAME)
+    settings = get_settings()
+    claims = jwt.decode(token, settings.secret_key.get_secret_value(), algorithms=['HS256'],
+                        audience=settings.jwt_audience, issuer=settings.jwt_issuer)
+    assert claims['exp'] - claims['iat'] == 900
+    claims['exp'] = datetime.now(UTC) - timedelta(seconds=1)
+    client.cookies.set(COOKIE_NAME, jwt.encode(claims, settings.secret_key.get_secret_value(),
+                                            algorithm='HS256'))
+    assert client.get('/api/v1/auth/me').status_code == 401
+    client.cookies.set(COOKIE_NAME, token)
+    with next(app.dependency_overrides[get_db]()) as db:
+        session = db.get(AuthSession, claims['jti'])
+        session.expires_at = datetime.now(UTC) - timedelta(seconds=1)
+        db.commit()
+    assert client.get('/api/v1/auth/me').status_code == 401
+    assert client.post('/api/v1/auth/logout', headers=ORIGIN).status_code == 204
+
+
+def test_audit_has_no_credentials_or_tokens(client):
+    from sqlalchemy import select
+    register(client)
+    login(client, 'wrong-password-123')
+    login(client)
+    token = client.cookies.get(COOKIE_NAME)
+    client.get('/api/v1/auth/me')
+    client.post('/api/v1/auth/logout', headers=ORIGIN)
+    with next(app.dependency_overrides[get_db]()) as db:
+        events = db.scalars(select(AuthEvent)).all()
+        assert {event.action for event in events} == {
+            'register_succeeded', 'login_failed', 'login_succeeded',
+            'session_viewed', 'logout_succeeded',
+        }
+        serialized = str([{column.name: getattr(event, column.name)
+                           for column in AuthEvent.__table__.columns} for event in events])
+        for secret in (PASSWORD, 'wrong-password-123', token, 'user@example.test', 'Fake Person'):
+            assert secret not in serialized
+
+
+def test_cors_and_openapi(client):
+    response = client.options('/api/v1/auth/logout', headers={
+        **ORIGIN, 'Access-Control-Request-Method': 'POST',
+        'Access-Control-Request-Headers': 'content-type',
+    })
+    assert response.status_code == 200
+    assert response.headers['access-control-allow-origin'] == ORIGIN['Origin']
+    assert response.headers['access-control-allow-credentials'] == 'true'
+    response = client.options('/api/v1/auth/logout', headers={
+        'Origin': 'https://evil.example', 'Access-Control-Request-Method': 'POST',
+    })
+    assert response.status_code == 400
+    assert 'access-control-allow-origin' not in response.headers
+    schema = client.get('/openapi.json').json()
+    assert '204' in schema['paths']['/api/v1/auth/logout']['post']['responses']
+    assert '429' in schema['paths']['/api/v1/auth/login']['post']['responses']
+    assert schema['components']['securitySchemes']['APIKeyCookie']['in'] == 'cookie'
+
+
+def test_mysql_concurrent_login_limit(client):
+    if not os.environ.get('TEST_DATABASE_URL'):
+        pytest.skip('requires real MySQL for row-lock concurrency validation')
+    from concurrent.futures import ThreadPoolExecutor
+
+    from app.repositories.auth import reserve_login_attempt
+
+    url = os.environ['TEST_DATABASE_URL']
+    engine = create_engine(url, hide_parameters=True)
+
+    def reserve(_):
+        with Session(engine) as db:
+            return reserve_login_attempt(db, 'concurrent@example.test')
+
+    try:
+        with ThreadPoolExecutor(max_workers=8) as executor:
+            results = list(executor.map(reserve, range(12)))
+        assert results.count(0) == 5
+        assert sum(value > 0 for value in results) == 7
+    finally:
+        engine.dispose()
+
+
+def test_signed_token_requires_matching_persisted_session(client):
+    register(client)
+    login(client)
+    settings = get_settings()
+    token = client.cookies.get(COOKIE_NAME)
+    claims = jwt.decode(token, settings.secret_key.get_secret_value(), algorithms=['HS256'],
+                        audience=settings.jwt_audience, issuer=settings.jwt_issuer)
+    for field, value in [('sub', '00000000-0000-0000-0000-000000000001'),
+                         ('jti', '00000000-0000-0000-0000-000000000002')]:
+        altered = {**claims, field: value}
+        client.cookies.set(COOKIE_NAME, jwt.encode(altered, settings.secret_key.get_secret_value(),
+                                                algorithm='HS256'))
+        assert client.get('/api/v1/auth/me').status_code == 401
+    del claims['jti']
+    client.cookies.set(COOKIE_NAME, jwt.encode(claims, settings.secret_key.get_secret_value(),
+                                            algorithm='HS256'))
+    assert client.get('/api/v1/auth/me').status_code == 401

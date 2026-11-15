@@ -38,3 +38,7 @@ class UserResponse(BaseModel):
     id: UUID
     email: str
     role: Role
+
+
+class ErrorResponse(BaseModel):
+    detail: str
