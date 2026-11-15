@@ -16,7 +16,7 @@ from app.schemas.auth import Credentials, Registration
 def register(db: Session, data: Registration) -> User:
     user = User(email=data.email, password_hash=password_hash.hash(data.password), role=data.role)
     profile = Patient(full_name=data.full_name) if data.role == Role.PATIENT else Professional(
-        full_name=data.full_name
+        full_name=data.full_name, crefito_region=data.crefito_region, crefito_number=data.crefito_number,
     )
     profile.user = user
     try:
@@ -28,7 +28,9 @@ def register(db: Session, data: Registration) -> User:
         db.rollback()
         audit(db, "register_rejected")
         db.commit()
-        raise HTTPException(status_code=409, detail="Unable to register with this email") from None
+        detail = ("Unable to register with these details" if data.role == Role.PROFESSIONAL
+                  else "Unable to register with this email")
+        raise HTTPException(status_code=409, detail=detail) from None
     return user
 
 

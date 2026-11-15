@@ -20,8 +20,11 @@ PASSWORD = "fake-password-123"
 
 
 def register(client, role="PATIENT", email=" User@Example.test "):
+    registration = ({"crefito_region": 3, "crefito_number": "123456-F"}
+                    if role == "PROFESSIONAL" else {})
     return client.post("/api/v1/auth/register", headers=ORIGIN, json={
         "email": email, "password": PASSWORD, "full_name": "Fake Person", "role": role,
+        **registration,
     })
 
 

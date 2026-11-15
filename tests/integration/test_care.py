@@ -1,5 +1,7 @@
 import os
 from concurrent.futures import ThreadPoolExecutor
+from datetime import UTC, datetime
+from itertools import count
 from uuid import uuid4
 
 import pytest
@@ -12,17 +14,32 @@ from test_auth import ORIGIN, PASSWORD
 from app.db.session import get_db
 from app.main import app
 from app.models.professional_link import CareAuditEvent, LinkStatus, ProfessionalLink
-from app.models.user import User
+from app.models.user import Professional, User
 from app.services.care import request_link, transition_link
 
+REGISTRATIONS = count(200000)
 
-def account(client, role, name):
+
+def account(client, role, name, verified=True):
     email = f"{name}@example.test"
+    registration = ({'crefito_region': 3, 'crefito_number': f'{next(REGISTRATIONS)}-F'}
+                    if role == 'PROFESSIONAL' else {})
     response = client.post('/api/v1/auth/register', headers=ORIGIN, json={
         'email': email, 'password': PASSWORD, 'full_name': f'Fake {name}', 'role': role,
+        **registration,
     })
     assert response.status_code == 201
     sign_in(client, name)
+    if role == 'PROFESSIONAL' and verified:
+        # Synthetic trusted review fixture only. No production path verifies a registration.
+        with next(app.dependency_overrides[get_db]()) as db:
+            professional = db.scalar(select(Professional).where(
+                Professional.user_id == response.json()['id'],
+            ))
+            professional.verification_status = 'verified'
+            professional.verified_at = datetime.now(UTC)
+            professional.verification_reference = 'synthetic-test-review-not-an-official-result'
+            db.commit()
     return client.get('/api/v1/me').json()
 
 
@@ -49,6 +66,7 @@ def transition(client, link, action):
     ('POST', '/me/professional-links', {'professional_id': str(uuid4())}),
     ('POST', f'/me/professional-links/{uuid4()}/accept', None),
     ('POST', f'/me/professional-links/{uuid4()}/revoke', None),
+    ('POST', f'/me/professional-links/{uuid4()}/reject', None),
     ('GET', f'/patients/{uuid4()}', None),
 ])
 def test_care_requires_authenticated_session(client, method, path, payload):
@@ -138,7 +156,14 @@ def test_one_active_link_and_pagination(client):
     sign_in(client, 'first')
     assert transition(client, one, 'revoke').status_code == 204
     sign_in(client, 'second')
-    assert transition(client, two, 'accept').status_code == 200
+    assert transition(client, two, 'accept').status_code == 409
+    sign_in(client, 'patient')
+    history = client.get('/api/v1/me/professional-links').json()['items']
+    assert {link['status'] for link in history} == {'revoked', 'cancelled'}
+    assert all(link['closed_at'].endswith('Z') for link in history)
+    replacement = request(client, second).json()['id']
+    sign_in(client, 'second')
+    assert transition(client, replacement, 'accept').status_code == 200
 
 
 def test_link_validation_and_audit_privacy(client):
@@ -256,3 +281,41 @@ def test_linked_patient_list_is_scoped_paginated_and_revoked(client):
     assert transition(client, one, 'revoke').status_code == 204
     sign_in(client, 'list-professional')
     assert [p['id'] for p in client.get('/api/v1/patients').json()['items']] == [second['id']]
+
+
+def test_refusal_cancellation_and_patient_controlled_switch(client):
+    first = account(client, 'PROFESSIONAL', 'first')
+    second = account(client, 'PROFESSIONAL', 'second')
+    patient = account(client, 'PATIENT', 'patient')
+    cancelled = request(client, first).json()['id']
+    assert transition(client, cancelled, 'reject').status_code == 403
+    assert transition(client, cancelled, 'revoke').status_code == 204
+    refused = request(client, first).json()['id']
+    sign_in(client, 'second')
+    assert transition(client, refused, 'reject').status_code == 404
+    sign_in(client, 'first')
+    assert transition(client, cancelled, 'accept').status_code == 409
+    assert transition(client, refused, 'reject').status_code == 204
+    assert transition(client, refused, 'accept').status_code == 409
+    sign_in(client, 'patient')
+    current = request(client, first).json()['id']
+    stale = request(client, second).json()['id']
+    sign_in(client, 'first')
+    assert transition(client, current, 'accept').status_code == 200
+    assert transition(client, current, 'reject').status_code == 409
+    sign_in(client, 'patient')
+    assert request(client, second).status_code == 409
+    assert transition(client, current, 'revoke').status_code == 204
+    replacement = request(client, second).json()['id']
+    sign_in(client, 'first')
+    assert client.get(f"/api/v1/patients/{patient['id']}").status_code == 404
+    sign_in(client, 'second')
+    assert transition(client, stale, 'accept').status_code == 409
+    assert transition(client, replacement, 'accept').status_code == 200
+    sign_in(client, 'patient')
+    history = client.get('/api/v1/me/professional-links').json()['items']
+    assert len(history) == 5
+    assert {link['status'] for link in history} == {'cancelled', 'rejected', 'revoked', 'active'}
+    with next(app.dependency_overrides[get_db]()) as db:
+        actions = set(db.scalars(select(CareAuditEvent.action)))
+        assert {'link_rejected', 'link_cancelled', 'link_superseded', 'link_revoked'} <= actions

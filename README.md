@@ -4,8 +4,17 @@
 
 O incremento P0 de perfis e vínculos está implementado. Os contratos para o
 frontend estão em [docs/frontend-contracts.md](docs/frontend-contracts.md).
+O MVP profissional é exclusivo para fisioterapeutas e exige CREFITO no cadastro.
+Formato válido não verifica habilitação. Profissionais não verificados ficam
+bloqueados para atuação clínica, inclusive por vínculos preexistentes.
+Esta entrega não promove contas a verificadas: a integração/revisão confiável
+ainda precisa ser definida. Veja [pesquisa e limitações](docs/crefito-verification.md).
 A migration `0004_professional_links` adiciona consentimento, histórico de vínculos,
 restrição atômica de um profissional ativo por paciente e auditoria de acesso.
+`0005_professional_crefito` adiciona CREFITO declarado único e status protegido;
+`0006_link_decisions` distingue recusa/cancelamento e preserva datas históricas.
+O aceite cancela demais pedidos pendentes na mesma transação. A troca exige
+encerramento do vínculo ativo e nova solicitação do paciente.
 
 `GET /api/v1/patients` lista, com paginação por cursor, somente pacientes com
 vínculo ativo com o profissional autenticado. Solicitações pendentes e vínculos
@@ -30,7 +39,7 @@ O contrato também está disponível em `/openapi.json` e `/docs`.
 
 | Endpoint | Corpo JSON | Resposta |
 | --- | --- | --- |
-| `POST /api/v1/auth/register` | `email`, `password`, `full_name`, `role` | 201 com usuário. Email duplicado retorna 409 com `{"detail":"Unable to register with this email"}`. |
+| `POST /api/v1/auth/register` | `email`, `password`, `full_name`, `role`; profissional exige `crefito_region` e `crefito_number` | 201 com usuário. Duplicidade retorna 409; paciente recebe `Unable to register with this email`, profissional recebe `Unable to register with these details`. |
 | `POST /api/v1/auth/login` | `email`, `password` | 200 com usuário e cookie. Credenciais incorretas retornam 401 com `{"detail":"Invalid credentials"}`. Limite atingido retorna 429 com `{"detail":"Too many login attempts"}` e `Retry-After` em segundos. |
 | `GET /api/v1/auth/me` | — | 200 com usuário da sessão. Cookie ausente, JWT inválido, expirado ou sessão revogada retornam 401 com `{"detail":"Not authenticated"}`. |
 | `POST /api/v1/auth/logout` | — | 204 sem corpo, revoga a sessão e remove o cookie. Idempotente, retorna 204 também para cookie ausente, inválido, expirado ou revogado. |

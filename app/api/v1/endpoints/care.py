@@ -13,6 +13,7 @@ from app.schemas.care import (
     LinkRequest,
     LinkResponse,
     PatientPage,
+    ProfessionalProfileResponse,
     ProfileResponse,
     ProfileUpdate,
 )
@@ -27,16 +28,16 @@ PatientUser = Annotated[User, Depends(require_role(Role.PATIENT))]
 ProfessionalUser = Annotated[User, Depends(require_role(Role.PROFESSIONAL))]
 
 
-@router.get("/me", response_model=ProfileResponse)
+@router.get("/me", response_model=ProfessionalProfileResponse | ProfileResponse)
 def me(response: Response, user: Authenticated, db: Database):
     response.headers["Cache-Control"] = "no-store"
     return service.read_profile(db, user)
 
 
-@router.patch("/me", response_model=ProfileResponse)
+@router.patch("/me", response_model=ProfessionalProfileResponse | ProfileResponse)
 def update_me(data: ProfileUpdate, response: Response, user: Authenticated, db: Database):
     response.headers["Cache-Control"] = "no-store"
-    return service.update_profile(db, user, data.full_name)
+    return service.update_profile(db, user, data)
 
 
 @router.get("/me/professional-links", response_model=LinkPage)
@@ -61,6 +62,12 @@ def accept_link(link_id: UUID, response: Response, user: ProfessionalUser, db: D
 @router.post("/me/professional-links/{link_id}/revoke", status_code=204)
 def revoke_link(link_id: UUID, user: Authenticated, db: Database):
     service.transition_link(db, user, str(link_id), accept=False)
+    return Response(status_code=204, headers={"Cache-Control": "no-store"})
+
+
+@router.post("/me/professional-links/{link_id}/reject", status_code=204)
+def reject_link(link_id: UUID, user: ProfessionalUser, db: Database):
+    service.transition_link(db, user, str(link_id), accept=False, reject=True)
     return Response(status_code=204, headers={"Cache-Control": "no-store"})
 
 
