@@ -71,3 +71,15 @@ def patient_active_link(db: Session, patient_id: str):
         ProfessionalLink.patient_id == patient_id,
         ProfessionalLink.status == LinkStatus.ACTIVE,
     ).with_for_update())
+
+
+def linked_patients(db: Session, professional_id: str, cursor: str | None, limit: int):
+    query = select(Patient).join(
+        ProfessionalLink, ProfessionalLink.patient_id == Patient.id,
+    ).where(
+        ProfessionalLink.professional_id == professional_id,
+        ProfessionalLink.status == LinkStatus.ACTIVE,
+    )
+    if cursor:
+        query = query.where(Patient.id > cursor)
+    return list(db.scalars(query.order_by(Patient.id).limit(limit + 1)))

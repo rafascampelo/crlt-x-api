@@ -43,3 +43,8 @@ class ProfileResponse(BaseModel):
 class ProfileUpdate(BaseModel):
     model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
     full_name: str = Field(min_length=1, max_length=200)
+
+
+class PatientPage(BaseModel):
+    items: list[ProfileResponse]
+    next_cursor: UUID | None

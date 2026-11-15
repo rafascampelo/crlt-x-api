@@ -56,6 +56,17 @@ def read_patient(db: Session, user: User, patient_id: str):
     return profile_response(profile, Role.PATIENT)
 
 
+def list_patients(db: Session, user: User, cursor: str | None, limit: int):
+    professional = own_profile(db, user)
+    patients = care.linked_patients(db, professional.id, cursor, limit)
+    next_cursor = patients[limit - 1].id if len(patients) > limit else None
+    for patient in patients[:limit]:
+        care.audit(db, user, "patient_viewed", patient.id, patient.id)
+    result = [profile_response(patient, Role.PATIENT) for patient in patients[:limit]]
+    db.commit()
+    return {"items": result, "next_cursor": next_cursor}
+
+
 def authorize_patient(db: Session, user: User, patient_id: str):
     identity = own_profile(db, user)
     if user.role == Role.PATIENT:

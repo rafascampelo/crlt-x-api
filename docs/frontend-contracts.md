@@ -24,6 +24,7 @@ tentativas por conta em 300 segundos, com 429 e `Retry-After`.
 | `GET /me` | Cookie | 200, perfil próprio |
 | `PATCH /me` | `{full_name}` | 200, perfil atualizado |
 | `GET /patients/{patient_id}` | Cookie | 200, perfil do paciente próprio ou vinculado ativamente |
+| `GET /patients` | Profissional; `limit` (1–100, padrão 20), `cursor` UUID opcional | 200, `{items, next_cursor}`, somente pacientes com vínculo ativo |
 | `GET /me/professional-links` | `limit` (1–100, padrão 20), `cursor` UUID opcional | 200, `{items, next_cursor}` |
 | `POST /me/professional-links` | Paciente envia `{professional_id}` | 201, vínculo pendente |
 | `POST /me/professional-links/{link_id}/accept` | Profissional destinatário, sem corpo | 200, vínculo ativo |

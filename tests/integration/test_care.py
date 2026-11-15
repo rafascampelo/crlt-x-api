@@ -222,3 +222,37 @@ def test_mysql_concurrent_duplicate_requests(client):
             assert sorted(pool.map(create, range(2))) == [201, 409]
     finally:
         engine.dispose()
+
+
+def test_linked_patient_list_is_scoped_paginated_and_revoked(client):
+    assert client.get('/api/v1/patients').status_code == 401
+    professional = account(client, 'PROFESSIONAL', 'list-professional')
+    account(client, 'PROFESSIONAL', 'list-outsider')
+    first = account(client, 'PATIENT', 'list-first')
+    one = request(client, professional).json()['id']
+    second = account(client, 'PATIENT', 'list-second')
+    two = request(client, professional).json()['id']
+    account(client, 'PATIENT', 'list-pending')
+    request(client, professional)
+    assert client.get('/api/v1/patients').status_code == 403
+    sign_in(client, 'list-professional')
+    assert client.get('/api/v1/patients').json()['items'] == []
+    assert transition(client, one, 'accept').status_code == 200
+    assert transition(client, two, 'accept').status_code == 200
+    page = client.get('/api/v1/patients?limit=1')
+    assert page.status_code == 200
+    assert page.headers['cache-control'] == 'no-store'
+    following = client.get('/api/v1/patients', params={
+        'limit': 1, 'cursor': page.json()['next_cursor'],
+    }).json()
+    assert following['next_cursor'] is None
+    rows = page.json()['items'] + following['items']
+    assert {row['id'] for row in rows} == {first['id'], second['id']}
+    assert all(set(row) == {'id', 'user_id', 'role', 'full_name'} for row in rows)
+    assert client.get('/api/v1/patients?limit=101').status_code == 422
+    sign_in(client, 'list-outsider')
+    assert client.get('/api/v1/patients').json()['items'] == []
+    sign_in(client, 'list-first')
+    assert transition(client, one, 'revoke').status_code == 204
+    sign_in(client, 'list-professional')
+    assert [p['id'] for p in client.get('/api/v1/patients').json()['items']] == [second['id']]

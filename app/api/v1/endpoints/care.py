@@ -8,7 +8,14 @@ from app.core.security import current_user, require_role
 from app.db.session import get_db
 from app.models.user import Role, User
 from app.schemas.auth import ErrorResponse
-from app.schemas.care import LinkPage, LinkRequest, LinkResponse, ProfileResponse, ProfileUpdate
+from app.schemas.care import (
+    LinkPage,
+    LinkRequest,
+    LinkResponse,
+    PatientPage,
+    ProfileResponse,
+    ProfileUpdate,
+)
 from app.services import care as service
 
 router = APIRouter(tags=["care"], responses={
@@ -61,3 +68,10 @@ def revoke_link(link_id: UUID, user: Authenticated, db: Database):
 def patient(patient_id: UUID, response: Response, user: Authenticated, db: Database):
     response.headers["Cache-Control"] = "no-store"
     return service.read_patient(db, user, str(patient_id))
+
+
+@router.get("/patients", response_model=PatientPage)
+def patients(response: Response, user: ProfessionalUser, db: Database,
+             cursor: UUID | None = None, limit: Annotated[int, Query(ge=1, le=100)] = 20):
+    response.headers["Cache-Control"] = "no-store"
+    return service.list_patients(db, user, str(cursor) if cursor else None, limit)

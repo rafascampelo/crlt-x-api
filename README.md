@@ -7,6 +7,10 @@ frontend estão em [docs/frontend-contracts.md](docs/frontend-contracts.md).
 A migration `0004_professional_links` adiciona consentimento, histórico de vínculos,
 restrição atômica de um profissional ativo por paciente e auditoria de acesso.
 
+`GET /api/v1/patients` lista, com paginação por cursor, somente pacientes com
+vínculo ativo com o profissional autenticado. Solicitações pendentes e vínculos
+revogados não aparecem. A resposta contém apenas o perfil básico, sem dados clínicos.
+
 ## Autenticação — CX-01
 
 Configure `DATABASE_URL`, `SECRET_KEY` aleatória (mínimo 32 caracteres),
