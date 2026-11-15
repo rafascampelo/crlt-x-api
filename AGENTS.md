@@ -8,7 +8,7 @@ Build a patient-first physical health monitoring API, using Python/FastAPI, SQLA
 - Branch names must be English, lowercase, and kebab-case, for example `feature/clinical-records`, `feature/pain-diary`, or `feature/fix-login`.
 - Never develop directly on `develop` or `prod`. Open a PR from `feature/*` to `develop`; the only normal release path is a PR from `develop` to `prod`.
 - Never push or merge without the user's explicit authorization. Never deploy a feature branch or `develop`; only a push to `prod` can deploy after CI and production approval.
-- User-approved PR automation may request auto-merge for `feature/*` to `develop` and `develop` to `prod` after manual activation of the documented GitHub App and rulesets. Never bypass CI, required reviews or production approval. Do not activate external settings without explicit authorization.
+- Pull requests and merges are manual. Never bypass CI, required reviews or production approval. Do not activate external settings without explicit authorization.
 - Use only these commit types and format: `feat: <short imperative description in English>`, `fix: ...`, `refactor: ...`, `tests: ...`. Keep each description short, imperative, and in English.
 - Make small commits grouped by one logical change. Do not combine independent features, fixes, and refactors in one commit.
 - Before each commit, run relevant tests, lint, and validation. Never commit `.env` files, credentials, secrets, or real clinical data.

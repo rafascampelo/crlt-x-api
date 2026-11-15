@@ -10,8 +10,8 @@ esse fluxo. Veja [comandos, configuração e recuperação](docs/database-migrat
 
 ## Fluxo e arquivos
 
-`push feature/*` → CI → PR para `develop` → CI do PR e revisão humana → auto-merge
-→ CI de `develop` → PR para `prod` → CI do PR e revisão humana → auto-merge
+`push feature/*` → CI → PR manual para `develop` → CI e revisão → merge manual
+→ CI de `develop` → PR manual para `prod` → CI e revisão → merge manual
 → push em `prod` → CI completa novamente → aprovação de `production`
 → pre-deploy de ctrl-x-migrations → validação do schema da API → ativação → smoke HTTP.
 
@@ -19,9 +19,6 @@ esse fluxo. Veja [comandos, configuração e recuperação](docs/database-migrat
   Alembic, build Docker e smoke em configuração de produção.
 - `.github/workflows/deploy-production.yml`: somente push em `prod`, CI do SHA
   exato e publicação de `ctrl-x-api`. Não publica MySQL nem frontend.
-- `.github/workflows/auto-promote.yml`: handler `workflow_run` privilegiado;
-  executa apenas código da branch padrão protegida, nunca código ou artifacts
-  de uma feature com acesso ao token de automação.
 - `.github/rulesets/{develop,prod}.json`: regras prontas para importar; precisam
   ser ativadas no GitHub para bloquear pushes diretos.
 - `railway.json`: Dockerfile, pre-deploy de verificação e healthcheck `/health`.
@@ -65,14 +62,11 @@ e Railway CLI em **5.74.0**; atualizações exigem PR e revisão.
 ## Configuração manual do GitHub
 
 1. Revisar e integrar a infraestrutura em develop por PR, sem push direto.
-2. Definir `develop` como branch padrão protegida após autorização administrativa.
-   `workflow_run` e seus scripts confiáveis precisam estar na branch padrão.
-   Se ela continuar sendo outra, esta automação não estará instalada nela.
-3. General → Pull Requests: habilitar **Allow auto-merge** e **merge commits**.
-   Não excluir develop automaticamente, nem usar squash em develop → prod.
+2. Usar PRs manuais de feature para develop e de develop para prod.
+3. Habilitar merge commits; não usar squash em develop → prod.
    Não habilitar merge queue sem adicionar `merge_group` à CI.
 4. Importar os JSONs em Settings → Rules → Rulesets. Conferir **Active**, destinos
-   exatos, **nenhum bypass**, inclusive administradores e App. A disponibilidade
+   exatos, **nenhum bypass**, inclusive administradores. A disponibilidade
    depende do plano/visibilidade. Selecionar `Backend CI` e `Branch policy`,
    preferencialmente vinculados ao GitHub Actions após o primeiro run; os nomes
    precisam coincidir com os checks reais.
@@ -87,31 +81,20 @@ e Railway CLI em **5.74.0**; atualizações exigem PR e revisão.
    autoaprovação e exigir revisor. Se o plano não oferecer esse gate, não ativar
    deploy até definir/aprovar um controle equivalente. Configurações Railway
    ficam nele, indisponíveis para jobs de PR.
-8. Criar Environment **promotion**, permitir apenas branch develop, sem tags ou
-   refs de PR. Ele guarda a chave do App e é usado pelo workflow_run da branch
-   padrão. Não guardar essa chave como secret comum do repositório: um workflow
-   alterado em feature não deve conseguir lê-la. Não remover a restrição de branch
-   para contornar uma falha de bootstrap. Não exige aprovação extra por execução;
-   os merges continuam aguardando as revisões obrigatórias dos PRs.
 
 Develop exige feature atualizada com sua base. Branch atrasada/conflitante exige
-atualização pelo desenvolvedor e nova revisão; a automação não força atualização.
+atualização pelo desenvolvedor e nova revisão.
 Prod exige CI, mas não exige que o HEAD de develop contenha o merge commit anterior
 de prod: evita ciclo de sincronização reversa entre branches protegidas. O PR
 testa o merge resultante e o push em prod repete CI antes de publicar. Mudanças
 concorrentes de base exigem atenção na revisão de release.
 
-### App de promoção e secrets
+### Secrets e variáveis de produção
 
-Criar GitHub App dedicado, instalado **só neste repositório**, com Contents:
-read/write, Pull requests: read/write e Metadata: read. Sem Administration write,
-sem bypass e sem token pessoal. O workflow solicita token de instalação temporário
-e revoga ao terminar. Não colocar chave privada em código, logs ou Railway.
+PRs e merges são manuais. Não é necessário GitHub App nem chave de promoção.
 
 | Local | Nome | Valor real a fornecer |
 | --- | --- | --- |
-| Environment variable promotion | `PROMOTION_APP_ID` | ID do App criado |
-| Environment secret promotion | `PROMOTION_APP_PRIVATE_KEY` | Chave privada do App |
 | Environment secret production | `RAILWAY_TOKEN` | Project token do projeto/environment de produção |
 | Environment variable production | `RAILWAY_PROJECT_ID` | UUID do projeto |
 | Environment variable production | `RAILWAY_SERVICE_ID` | UUID de ctrl-x-api, nunca MySQL |
@@ -124,17 +107,8 @@ O escopo é projeto/environment, não serviço: o script também confere nome e 
 ctrl-x-api antes de upload, recusando ctrl-x-mysql. CLI usa `link`, `up --detach
 --json` e `deployment list --json`. Upload aceito não comprova deploy saudável.
 
-O App permite que PRs e merges disparem novos workflows, inclusive push em prod.
-`GITHUB_TOKEN` tem restrições de recursão e não é usado para essas mutações.
-O script só solicita auto-merge: não aprova nem pula checks ou faz merge
-administrativo. Recusa ativação sem regras efetivas com revisões/checks exigidos.
-Drafts não são ativados. Runs antigos, forks e branches sem diferenças não
-produzem promoções indevidas.
-
-**Bootstrap:** ativar proteções e revisores antes de cadastrar a chave do App.
-Após autorizar ativação, testar feature pequena e observar CI, PR para develop,
-espera de revisão, merge, PR para prod, nova revisão e aprovação de production.
-Esta entrega não faz auto-merge nem teste remoto de publicação.
+Após configurar proteções e revisores, abrir os PRs manualmente, aguardar CI
+e revisão humana, e aprovar production somente após conferir backup e migrations.
 
 ## Recursos Railway a criar manualmente
 
@@ -257,8 +231,8 @@ Não anexar dumps ao Actions nem despejar dados clínicos em logs.
 ## Primeiro deploy e diagnóstico
 
 1. Concluir serviços, Variables, DNS/cookies, backups e desativação de autodeploy.
-2. Concluir regras, App, secrets e revisores. Conferir bloqueio de push e ausência
-   de bypass do App; não testar usando dados reais.
+2. Concluir regras, secrets e revisores. Conferir bloqueio de push e ausência
+   de bypass; não testar usando dados reais.
 3. Feature → develop → prod por PR, CI e aprovações. Liberar production só após
    revisar migrations/backup.
 4. Actions verifica SHA, checksum e destino, envia só API, acompanha ID e smoke.
@@ -303,5 +277,4 @@ continuam necessários antes do primeiro release.
 - [CLI 5.74.0 upload](https://github.com/railwayapp/cli/blob/v5.74.0/src/commands/up.rs)
 - [CLI 5.74.0 status](https://github.com/railwayapp/cli/blob/v5.74.0/src/commands/status.rs)
 - [Eventos e tokens GitHub](https://docs.github.com/en/actions/how-tos/write-workflows/choose-when-workflows-run/trigger-a-workflow)
-- [Auto-merge](https://docs.github.com/en/repositories/configuring-branches-and-merges-in-your-repository/configuring-pull-request-merges/managing-auto-merge-for-pull-requests-in-your-repository)
 - [Regras efetivas por branch](https://docs.github.com/en/rest/repos/rules)

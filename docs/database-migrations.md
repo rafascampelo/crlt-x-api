@@ -110,8 +110,8 @@ no GitHub Actions. O runner usa somente o project token RAILWAY_TOKEN para envio
 
 O GitHub também mantém RAILWAY_PROJECT_ID, RAILWAY_ENVIRONMENT_ID,
 RAILWAY_SERVICE_ID e BACKEND_PRODUCTION_URL como variables, e RAILWAY_TOKEN como
-secret do environment production. As configurações de App de promoção continuam
-separadas no environment promotion e não são necessárias para acessar MySQL.
+secret do environment production. Não é necessário GitHub App nem environment
+promotion: PRs e merges são manuais.
 
 ## Compatibilidade, backup e recuperação
 

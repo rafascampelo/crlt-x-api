@@ -133,9 +133,9 @@ O deploy usa `.github/workflows/deploy-production.yml` e `railway.json`, com
 Alembic no job `database-migrations`, executado no serviço privado
 `ctrl-x-migrations` antes do job da API. O pre-deploy da API e cada réplica
 apenas verificam o schema. Comandos e ativação: [migrations](docs/database-migrations.md).
-Automação de PR/auto-merge de feature → develop → prod aguarda checks e revisões.
+PRs e merges de feature → develop → prod são manuais, com checks e revisões.
 Os rulesets em `.github/rulesets/` precisam ser importados/ativados no GitHub
-para bloquear pushes diretos. App, secrets, revisores e serviços Railway ainda
+para bloquear pushes diretos. Secrets, revisores e serviços Railway ainda
 exigem configuração manual autorizada; os arquivos locais não alteram essas contas.
 As migrações agora estão inicializadas; defina `DATABASE_URL` antes de executar
 `python -m alembic upgrade head`. `0002_users` cria usuários e perfis;

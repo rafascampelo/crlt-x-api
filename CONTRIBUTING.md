@@ -19,9 +19,8 @@ nome. Nunca edite diretamente em `develop` ou `prod`.
 
 Abra PR de `feature/*` para `develop`. O único caminho normal de publicação é PR
 de `develop` para `prod`. PR para `prod` vindo de outra branch falha no CI. Não
-faça push ou merge manual sem autorização explícita do usuário. A automação
-aprovada em [CI-CD.md](CI-CD.md), após ativação manual do App e rulesets, cria PRs
-e solicita auto-merge nos dois caminhos, aguardando CI e revisões humanas.
+faça push ou merge sem autorização explícita do usuário. PRs e merges são
+manuais e aguardam CI e revisões humanas, conforme [CI-CD.md](CI-CD.md).
 Nenhuma feature ou develop publica diretamente; só push em prod pode publicar
 após nova CI e aprovação do Environment production. Não há bypass ou autoaprovação.
 
