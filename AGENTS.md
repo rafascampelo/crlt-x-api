@@ -3,6 +3,20 @@
 ## Mission
 Build a patient-first physical health monitoring API, using Python/FastAPI, SQLAlchemy 2, Alembic, MySQL 8.4 and pytest. Work in small, reviewable increments.
 
+## Mandatory Git workflow
+- Before changing files for a feature, fix, or refactor, verify the worktree is clean and create a dedicated branch from the latest `develop`: `feature/<feature-name>`.
+- Branch names must be English, lowercase, and kebab-case, for example `feature/clinical-records`, `feature/pain-diary`, or `feature/fix-login`.
+- Never develop directly on `develop` or `prod`. Open a PR from `feature/*` to `develop`; the only normal release path is a PR from `develop` to `prod`.
+- Never push or merge without the user's explicit authorization. Never deploy a feature branch or `develop`; only a push to `prod` can deploy after CI and production approval.
+- Use only these commit types and format: `feat: <short imperative description in English>`, `fix: ...`, `refactor: ...`, `tests: ...`. Keep each description short, imperative, and in English.
+- Make small commits grouped by one logical change. Do not combine independent features, fixes, and refactors in one commit.
+- Before each commit, run relevant tests, lint, and validation. Never commit `.env` files, credentials, secrets, or real clinical data.
+- CI validates every commit in every pull request against the exact allowed format. Validate locally before committing with `python scripts/validate_commit_messages.py --local` (requires Git access to fetch `origin/develop`).
+- Protect `develop` and `prod`: require PRs and passing CI, block direct pushes, force pushes, deletion, and bypass. Require review for workflow and release-script changes.
+- Do not add product features while changing development rules or CI configuration.
+
+Product context: Ctrl X is a responsive web application accessed in a browser on desktop, tablet and mobile devices. The Next.js frontend is deployed to Vercel and this API to Railway.
+
 ## Architecture
 - Keep `api/v1` (HTTP), `schemas` (validation), `services` (business rules), `repositories` (persistence), `models` (ORM), `core` (security/config) separate.
 - Use UUIDs as public resource identifiers. CPF is optional/protected identity data, never a primary key or exposed in logs.
