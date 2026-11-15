@@ -82,6 +82,12 @@ HMAC-SHA256 do email. O limite por conta permite bloqueio temporário provocado
 por terceiros. Proteção contra ataques distribuídos por muitas contas permanece
 pendente.
 
+O início da janela usa precisão de segundos, alinhada ao `DATETIME` do MySQL,
+com descarte explícito dos microssegundos antes de persistir. Isso evita que
+arredondamento do banco produza `Retry-After: 301`. O relógio é atualizado após
+obter o bloqueio, e o cabeçalho fica entre 1 e 300 segundos, inclusive para
+linhas antigas que tenham sido arredondadas para o segundo seguinte.
+
 `auth_events` persiste `register_succeeded`, `register_rejected`, `login_failed`,
 `login_blocked`, `login_succeeded`, `session_viewed`, `logout_succeeded` e
 `logout_anonymous`, contendo UUID do evento, ação, UUID do usuário quando
