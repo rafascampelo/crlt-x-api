@@ -152,6 +152,27 @@ confere versões e só aplica pendentes. Serviços devem referenciar o mesmo ban
 startup da API detecta divergência de schema, mas configuração incorreta de um
 banco com mesma versão requer conferência operacional antes da ativação.
 
+## Validação local em 15/11/2026
+
+- `python -m pytest -p no:cacheprovider` em Linux com MySQL 8.4 descartável:
+  **146 passaram, nenhum pulado**, incluindo lock, falha de migration e
+  propagação de erro para o job de deploy.
+- `python -m ruff check .` e `git diff --check`: passaram.
+- `docker build --progress=plain --tag ctrlx-backend:migrations-check .`: passou.
+- actionlint 1.7.7 e ShellCheck, nos três workflows: passaram.
+- db:status, db:migrate repetido, status --require-current, rollback local,
+  downgrade base/upgrade e Alembic check: passaram somente no banco descartável.
+- db:create gerou uma revisão em cópia temporária das migrations.
+- Imagem com APP_ENV=production e DB_* sintéticas: schema pendente bloqueou
+  startup, migration na rede Docker privada simulada passou; API e sentinel
+  responderam HTTP 200 em PORT=8080. Ausência de .env na imagem confirmada.
+- `python -m pip check` na imagem: nenhuma dependência quebrada.
+
+Os testes não comprovam a configuração real do Railway/GitHub. Não houve
+migration real, deploy remoto, alteração de autodeploy, backup/restore de
+produção nem ativação de recursos externos. Há avisos de depreciação existentes
+de TestClient/httpx e configuração Alembic; não foram adicionadas dependências.
+
 ## Referências
 
 - https://docs.railway.com/deployments/pre-deploy-command

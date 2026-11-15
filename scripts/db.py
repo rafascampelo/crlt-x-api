@@ -13,9 +13,11 @@ from scripts.ci_database import validate_ci_database
 from scripts.migrate_production import (
     check_connection,
     migrate,
-    migration_status as status,
     production_engine,
     verify_revision,
+)
+from scripts.migrate_production import (
+    migration_status as status,
 )
 
 

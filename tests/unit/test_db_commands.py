@@ -6,7 +6,7 @@ import pytest
 from alembic.config import Config
 from sqlalchemy import create_engine
 
-from scripts import db, deploy_migrations
+from scripts import db, deploy_migrations, migration_sentinel
 
 
 @pytest.mark.parametrize("command", ["db:rollback", "db:create"])
@@ -111,3 +111,13 @@ def test_api_predeploy_only_checks_schema():
     assert config["deploy"]["preDeployCommand"] == [
         "python -m scripts.db db:status --require-current",
     ]
+
+
+def test_sentinel_does_not_accept_pending_schema_or_expose_errors(capsys):
+    with (
+        patch("scripts.migration_sentinel.check_schema", side_effect=RuntimeError("synthetic-secret")),
+        patch("scripts.migration_sentinel.HTTPServer") as server,
+    ):
+        assert migration_sentinel.main() == 1
+        server.assert_not_called()
+    assert "synthetic-secret" not in capsys.readouterr().err
