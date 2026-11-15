@@ -243,6 +243,26 @@ environment, private DNS, usuário/banco e URL escapada. Em falha de migration,
 conferir revisão e estado parcial. Em falha HTTP, conferir PORT, certificado,
 domínio, ID e mensagens sanitizadas de startup.
 
+## Validação local desta entrega (15/11/2026)
+
+- `python -m pytest`: 119 passaram e 8 casos MySQL foram pulados no Windows.
+- `python -m pytest -p no:cacheprovider` com MySQL 8.4 isolado: **127 passaram,
+  nenhum pulado**, incluindo lock, falha de migration e preservação de legado.
+- `python -m ruff check .`: passou no Windows e na cópia Linux normalizada.
+- `python -m alembic upgrade head`, `check`, `downgrade base`, novo upgrade/check:
+  passaram exclusivamente no MySQL descartável.
+- `docker build`: passou; `pip check`, Tesseract por/eng, usuário 10001,
+  ausência de .env, health HTTP 200 em PORT=8080 e SIGTERM limpo confirmados.
+- Imagem em production recusou startup com revisão pendente; pre-deploy
+  `python -m scripts.migrate_production` na rede privada Docker simulada passou.
+- actionlint 1.7.7 e ShellCheck: passaram nos três workflows.
+- Railway CLI 5.74.0: versão e ajuda das flags conferidas, sem autenticação/deploy.
+
+Há avisos preexistentes de depreciação de TestClient/httpx e configuração Alembic.
+Não foi executado run no GitHub, auto-merge real, conexão Railway de produção,
+backup/restore de produção ou deploy externo. Esses testes e a ativação manual
+continuam necessários antes do primeiro release.
+
 ## Referências oficiais
 
 - [Pre-deploy Railway](https://docs.railway.com/deployments/pre-deploy-command)
