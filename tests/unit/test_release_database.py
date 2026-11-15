@@ -41,10 +41,13 @@ def test_migration_failure_releases_lock_and_hides_connection_details(capsys):
     with (
         patch('scripts.migrate_production.production_engine', return_value=engine),
         patch('scripts.migrate_production.ScriptDirectory') as scripts,
-        patch('scripts.migrate_production.command.upgrade', side_effect=RuntimeError('secret-url')),
+        patch('scripts.migrate_production.migration_status'),
+        patch('scripts.migrate_production.command.upgrade',
+              side_effect=RuntimeError('secret-url')) as upgrade,
     ):
         scripts.from_config.return_value.get_heads.return_value = ['head']
         assert migrate_production.main() == 1
+        upgrade.assert_called_once()
     assert 'secret-url' not in capsys.readouterr().err
     assert 'RELEASE_LOCK' in str(connection.execute.call_args.args[0])
     engine.dispose.assert_called_once()

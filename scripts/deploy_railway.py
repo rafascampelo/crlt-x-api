@@ -26,21 +26,22 @@ def validate_release_config():
     config = json.loads(Path("railway.json").read_text(encoding="utf-8"))
     if (config.get("build", {}).get("builder") != "DOCKERFILE"
             or config.get("deploy", {}).get("preDeployCommand") != [
-                "python -m scripts.migrate_production"
+                "python -m scripts.db db:status --require-current"
             ] or config.get("deploy", {}).get("healthcheckPath") != "/health"):
         raise ValueError("Release must include the controlled migration and healthcheck configuration")
 
 
-def verify_api_target(project: str, service: str, environment: str):
+def verify_api_target(project: str, service: str, environment: str,
+                      expected_name: str = "ctrl-x-api"):
     metadata = json.loads(railway("status", "--project", project,
                                   "--environment", environment, "--json"))
     services = [edge["node"] for edge in metadata["services"]["edges"]]
     environments = [edge["node"] for edge in metadata["environments"]["edges"]]
     if (metadata["id"] != project
-            or not any(item["id"] == service and item["name"] == "ctrl-x-api" for item in services)
+            or not any(item["id"] == service and item["name"] == expected_name for item in services)
             or not any(item["id"] == environment and item["name"] == "production"
                        for item in environments)):
-        raise RuntimeError("Refusing deploy outside ctrl-x-api in the production environment")
+        raise RuntimeError(f"Refusing deploy outside {expected_name} in the production environment")
 
 
 def railway(*args: str) -> str:

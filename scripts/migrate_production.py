@@ -10,6 +10,7 @@ from sqlalchemy import create_engine, text
 from sqlalchemy.engine import make_url
 
 from alembic import command
+from app.core.database_config import DatabaseSettings
 
 LOCK_NAME = "ctrlx.alembic.production"
 
@@ -17,7 +18,7 @@ LOCK_NAME = "ctrlx.alembic.production"
 def production_engine():
     if os.environ.get("APP_ENV") != "production" or os.environ.get("CI") == "true":
         raise RuntimeError("Production database access requires the Railway production environment")
-    url = make_url(os.environ["DATABASE_URL"])
+    url = make_url(DatabaseSettings().database_url.get_secret_value())
     if (url.drivername != "mysql+pymysql" or not url.host
             or not url.host.endswith(".railway.internal") or url.port != 3306
             or not url.username or not url.password or not url.database):
@@ -32,6 +33,19 @@ def verify_revision(connection, config):
         raise RuntimeError("Exactly one Alembic head is required")
     if MigrationContext.configure(connection).get_current_heads() != heads:
         raise RuntimeError("Database migrations are pending; refusing API activation")
+
+
+def migration_status(connection, config, require_current=False):
+    scripts = ScriptDirectory.from_config(config)
+    heads = tuple(scripts.get_heads())
+    current = MigrationContext.configure(connection).get_current_heads()
+    if len(heads) != 1:
+        raise RuntimeError("Exactly one Alembic head is required")
+    pending = list(scripts.iterate_revisions(heads, current))
+    print(f"Schema revisions: current={','.join(current) or 'base'}; head={heads[0]}; "
+          f"pending={len(pending)}", flush=True)
+    if require_current:
+        verify_revision(connection, config)
 
 
 def check_connection(connection):
@@ -64,8 +78,10 @@ def migrate():
                 if len(ScriptDirectory.from_config(config).get_heads()) != 1:
                     raise RuntimeError("Exactly one Alembic head is required")
                 config.attributes["connection"] = connection
+                migration_status(connection, config)
                 command.upgrade(config, "head")
                 verify_revision(connection, config)
+                migration_status(connection, config, require_current=True)
                 print("Production migrations completed and revision verified", flush=True)
             finally:
                 connection.execute(text("SELECT RELEASE_LOCK(:name)"), {"name": LOCK_NAME})

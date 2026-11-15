@@ -21,7 +21,7 @@ RUN python -m pip install -r requirements.lock && python -m pip check
 COPY app ./app
 COPY alembic ./alembic
 COPY alembic.ini ./
-COPY scripts/__init__.py scripts/ci_database.py scripts/migrate_production.py scripts/start_api.py ./scripts/
+COPY scripts/__init__.py scripts/ci_database.py scripts/migrate_production.py scripts/start_api.py scripts/db.py scripts/migration_sentinel.py ./scripts/
 
 USER 10001:10001
 EXPOSE 8000
