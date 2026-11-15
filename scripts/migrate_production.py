@@ -10,6 +10,7 @@ from sqlalchemy import create_engine, text
 from sqlalchemy.engine import make_url
 
 from alembic import command
+from app.core.database_config import DatabaseSettings
 
 LOCK_NAME = "ctrlx.alembic.production"
 
@@ -17,7 +18,7 @@ LOCK_NAME = "ctrlx.alembic.production"
 def production_engine():
     if os.environ.get("APP_ENV") != "production" or os.environ.get("CI") == "true":
         raise RuntimeError("Production database access requires the Railway production environment")
-    url = make_url(os.environ["DATABASE_URL"])
+    url = make_url(DatabaseSettings().database_url.get_secret_value())
     if (url.drivername != "mysql+pymysql" or not url.host
             or not url.host.endswith(".railway.internal") or url.port != 3306
             or not url.username or not url.password or not url.database):

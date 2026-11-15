@@ -152,6 +152,24 @@ tarefa. Os nomes acima são requisitos, não recursos criados pela implementaç�
 
 ### Variables da API
 
+Alternativamente a `DATABASE_URL`, configure as cinco variáveis abaixo no serviço
+`ctrl-x-api`, usando referências às variáveis do serviço MySQL:
+
+| Variável da API | Referência Railway |
+| --- | --- |
+| DB_USER | `${{ctrl-x-mysql.MYSQLUSER}}` |
+| DB_PASSWORD | `${{ctrl-x-mysql.MYSQLPASSWORD}}` |
+| DB_HOST | `${{ctrl-x-mysql.RAILWAY_PRIVATE_DOMAIN}}` |
+| DB_PORT | `3306` |
+| DB_NAME | `${{ctrl-x-mysql.MYSQLDATABASE}}` |
+
+Confira os nomes reais das variáveis no serviço MySQL. Os cinco campos `DB_*`
+têm prioridade sobre `DATABASE_URL`; se algum estiver definido, todos são
+obrigatórios. Informe a senha original, sem percent-encoding: `URL.create`
+trata os caracteres especiais. API, Alembic e pre-deploy usam a mesma resolução.
+O host continua privado, terminado em `.railway.internal`, com MySQL 8.4.
+Não use o endereço TCP público. As demais variáveis abaixo continuam necessárias.
+
 | Variável | Configuração |
 | --- | --- |
 | APP_ENV | production |

@@ -4,6 +4,8 @@ from urllib.parse import urlsplit
 from pydantic import SecretStr, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
+from app.core.database_config import DatabaseSettings
+
 
 class CorsSettings(BaseSettings):
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
@@ -26,8 +28,8 @@ class CorsSettings(BaseSettings):
         return values
 
 
-class Settings(CorsSettings):
-    database_url: SecretStr
+class Settings(DatabaseSettings, CorsSettings):
+    model_config = SettingsConfigDict(env_file=".env", extra="ignore", hide_input_in_errors=True)
     secret_key: SecretStr
     jwt_issuer: str = "ctrl-x-api"
     jwt_audience: str = "ctrl-x-web"
