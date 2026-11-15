@@ -7,7 +7,7 @@ from app.models.user import Patient, Professional, Role, User
 
 def profile(db: Session, user: User):
     model = Patient if user.role == Role.PATIENT else Professional
-    return db.scalar(select(model).where(model.user_id == user.id))
+    return db.scalar(select(model).where(model.user_id == user.id).with_for_update())
 
 
 def audit(db: Session, actor: User, action: str, resource_id: str,
@@ -71,3 +71,23 @@ def patient_active_link(db: Session, patient_id: str):
         ProfessionalLink.patient_id == patient_id,
         ProfessionalLink.status == LinkStatus.ACTIVE,
     ).with_for_update())
+
+
+def pending_links(db: Session, patient_id: str, exclude_id: str):
+    return list(db.scalars(select(ProfessionalLink).where(
+        ProfessionalLink.patient_id == patient_id,
+        ProfessionalLink.status == LinkStatus.PENDING,
+        ProfessionalLink.id != exclude_id,
+    ).order_by(ProfessionalLink.id).with_for_update()))
+
+
+def linked_patients(db: Session, professional_id: str, cursor: str | None, limit: int):
+    query = select(Patient).join(
+        ProfessionalLink, ProfessionalLink.patient_id == Patient.id,
+    ).where(
+        ProfessionalLink.professional_id == professional_id,
+        ProfessionalLink.status == LinkStatus.ACTIVE,
+    )
+    if cursor:
+        query = query.where(Patient.id > cursor)
+    return list(db.scalars(query.order_by(Patient.id).limit(limit + 1)))

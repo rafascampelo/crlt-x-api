@@ -33,7 +33,8 @@ def reserve_login_attempt(db: Session, email: str) -> int:
         get_settings().secret_key.get_secret_value().encode(), email.encode(), hashlib.sha256,
     ).hexdigest()
     now = datetime.now(UTC)
-    values = {"key": key, "window_start": now, "attempts": 0}
+    # DATETIME(0) may round fractional seconds up, placing the start in the future.
+    values = {"key": key, "window_start": now.replace(microsecond=0), "attempts": 0}
     if db.get_bind().dialect.name == "mysql":
         statement = mysql_insert(LoginLimit).values(**values)
         statement = statement.on_duplicate_key_update(key=statement.inserted.key)
@@ -41,15 +42,16 @@ def reserve_login_attempt(db: Session, email: str) -> int:
         statement = sqlite_insert(LoginLimit).values(**values).on_conflict_do_nothing()
     db.execute(statement)
     limit = db.scalar(select(LoginLimit).where(LoginLimit.key == key).with_for_update())
+    now = datetime.now(UTC)
     reset_at = utc(limit.window_start) + timedelta(seconds=LOGIN_WINDOW_SECONDS)
     if now >= reset_at:
-        limit.window_start = now
+        limit.window_start = now.replace(microsecond=0)
         limit.attempts = 0
-        reset_at = now + timedelta(seconds=LOGIN_WINDOW_SECONDS)
+        reset_at = limit.window_start + timedelta(seconds=LOGIN_WINDOW_SECONDS)
     if limit.attempts >= LOGIN_ATTEMPTS:
         audit(db, "login_blocked")
         db.commit()
-        return max(1, math.ceil((reset_at - now).total_seconds()))
+        return min(LOGIN_WINDOW_SECONDS, max(1, math.ceil((reset_at - now).total_seconds())))
     limit.attempts += 1
     db.commit()
     return 0

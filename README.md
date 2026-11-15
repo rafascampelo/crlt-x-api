@@ -4,8 +4,21 @@
 
 O incremento P0 de perfis e vínculos está implementado. Os contratos para o
 frontend estão em [docs/frontend-contracts.md](docs/frontend-contracts.md).
+O MVP profissional é exclusivo para fisioterapeutas e exige CREFITO no cadastro.
+Formato válido não verifica habilitação. Profissionais não verificados ficam
+bloqueados para atuação clínica, inclusive por vínculos preexistentes.
+Esta entrega não promove contas a verificadas: a integração/revisão confiável
+ainda precisa ser definida. Veja [pesquisa e limitações](docs/crefito-verification.md).
 A migration `0004_professional_links` adiciona consentimento, histórico de vínculos,
 restrição atômica de um profissional ativo por paciente e auditoria de acesso.
+`0005_professional_crefito` adiciona CREFITO declarado único e status protegido;
+`0006_link_decisions` distingue recusa/cancelamento e preserva datas históricas.
+O aceite cancela demais pedidos pendentes na mesma transação. A troca exige
+encerramento do vínculo ativo e nova solicitação do paciente.
+
+`GET /api/v1/patients` lista, com paginação por cursor, somente pacientes com
+vínculo ativo com o profissional autenticado. Solicitações pendentes e vínculos
+revogados não aparecem. A resposta contém apenas o perfil básico, sem dados clínicos.
 
 ## Autenticação — CX-01
 
@@ -26,7 +39,7 @@ O contrato também está disponível em `/openapi.json` e `/docs`.
 
 | Endpoint | Corpo JSON | Resposta |
 | --- | --- | --- |
-| `POST /api/v1/auth/register` | `email`, `password`, `full_name`, `role` | 201 com usuário. Email duplicado retorna 409 com `{"detail":"Unable to register with this email"}`. |
+| `POST /api/v1/auth/register` | `email`, `password`, `full_name`, `role`; profissional exige `crefito_region` e `crefito_number` | 201 com usuário. Duplicidade retorna 409; paciente recebe `Unable to register with this email`, profissional recebe `Unable to register with these details`. |
 | `POST /api/v1/auth/login` | `email`, `password` | 200 com usuário e cookie. Credenciais incorretas retornam 401 com `{"detail":"Invalid credentials"}`. Limite atingido retorna 429 com `{"detail":"Too many login attempts"}` e `Retry-After` em segundos. |
 | `GET /api/v1/auth/me` | — | 200 com usuário da sessão. Cookie ausente, JWT inválido, expirado ou sessão revogada retornam 401 com `{"detail":"Not authenticated"}`. |
 | `POST /api/v1/auth/logout` | — | 204 sem corpo, revoga a sessão e remove o cookie. Idempotente, retorna 204 também para cookie ausente, inválido, expirado ou revogado. |
@@ -81,6 +94,12 @@ instâncias devem compartilhar banco e SECRET_KEY. A chave persistida é
 HMAC-SHA256 do email. O limite por conta permite bloqueio temporário provocado
 por terceiros. Proteção contra ataques distribuídos por muitas contas permanece
 pendente.
+
+O início da janela usa precisão de segundos, alinhada ao `DATETIME` do MySQL,
+com descarte explícito dos microssegundos antes de persistir. Isso evita que
+arredondamento do banco produza `Retry-After: 301`. O relógio é atualizado após
+obter o bloqueio, e o cabeçalho fica entre 1 e 300 segundos, inclusive para
+linhas antigas que tenham sido arredondadas para o segundo seguinte.
 
 `auth_events` persiste `register_succeeded`, `register_rejected`, `login_failed`,
 `login_blocked`, `login_succeeded`, `session_viewed`, `logout_succeeded` e

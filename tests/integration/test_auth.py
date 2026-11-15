@@ -20,8 +20,11 @@ PASSWORD = "fake-password-123"
 
 
 def register(client, role="PATIENT", email=" User@Example.test "):
+    registration = ({"crefito_region": 3, "crefito_number": "123456-F"}
+                    if role == "PROFESSIONAL" else {})
     return client.post("/api/v1/auth/register", headers=ORIGIN, json={
         "email": email, "password": PASSWORD, "full_name": "Fake Person", "role": role,
+        **registration,
     })
 
 
@@ -140,6 +143,70 @@ def test_login_limit_and_recovery(client):
         db.execute(update(LoginLimit).values(window_start=datetime.now(UTC) - timedelta(seconds=301)))
         db.commit()
     assert login(client).status_code == 200
+
+
+@pytest.mark.parametrize('microsecond', [100000, 900000])
+def test_login_limit_second_precision_and_expiry(client, monkeypatch, microsecond):
+    from sqlalchemy import select
+
+    from app.repositories import auth as repository
+
+    start = datetime(2026, 1, 1, tzinfo=UTC)
+
+    class Clock(datetime):
+        instant = start.replace(microsecond=microsecond)
+
+        @classmethod
+        def now(cls, tz=None):
+            return cls.instant
+
+    monkeypatch.setattr(repository, 'datetime', Clock)
+    for _ in range(5):
+        assert login(client, 'wrong-password-123').status_code == 401
+    blocked = login(client)
+    assert blocked.status_code == 429
+    assert blocked.headers['retry-after'] == '300'
+    with next(app.dependency_overrides[get_db]()) as db:
+        limit = db.scalar(select(LoginLimit))
+        assert repository.utc(limit.window_start) == start
+        assert limit.attempts == 5
+    Clock.instant = start + timedelta(seconds=299, microseconds=900000)
+    assert login(client).headers['retry-after'] == '1'
+    Clock.instant = start + timedelta(seconds=300, microseconds=microsecond)
+    assert login(client).status_code == 401
+    with next(app.dependency_overrides[get_db]()) as db:
+        limit = db.scalar(select(LoginLimit))
+        assert repository.utc(limit.window_start) == start + timedelta(seconds=300)
+        assert limit.attempts == 1
+
+
+def test_retry_after_is_bounded_for_previously_rounded_window(client, monkeypatch):
+    from sqlalchemy import select
+
+    from app.repositories import auth as repository
+
+    now = datetime(2026, 1, 1, microsecond=900000, tzinfo=UTC)
+
+    class Clock(datetime):
+        @classmethod
+        def now(cls, tz=None):
+            return now
+
+    monkeypatch.setattr(repository, 'datetime', Clock)
+    for _ in range(5):
+        assert login(client).status_code == 401
+    with next(app.dependency_overrides[get_db]()) as db:
+        limit = db.scalar(select(LoginLimit))
+        # Simulate a row saved before the fix and rounded up by MySQL DATETIME(0).
+        limit.window_start = now.replace(microsecond=0) + timedelta(seconds=1)
+        db.commit()
+    response = login(client)
+    assert response.status_code == 429
+    assert response.headers['retry-after'] == '300'
+    with next(app.dependency_overrides[get_db]()) as db:
+        limit = db.scalar(select(LoginLimit))
+        assert limit.attempts == 5
+        assert repository.utc(limit.window_start) == now.replace(microsecond=0) + timedelta(seconds=1)
 
 
 def test_unknown_account_is_limited_and_accounts_are_independent(client):

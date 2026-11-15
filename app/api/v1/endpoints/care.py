@@ -8,7 +8,15 @@ from app.core.security import current_user, require_role
 from app.db.session import get_db
 from app.models.user import Role, User
 from app.schemas.auth import ErrorResponse
-from app.schemas.care import LinkPage, LinkRequest, LinkResponse, ProfileResponse, ProfileUpdate
+from app.schemas.care import (
+    LinkPage,
+    LinkRequest,
+    LinkResponse,
+    PatientPage,
+    ProfessionalProfileResponse,
+    ProfileResponse,
+    ProfileUpdate,
+)
 from app.services import care as service
 
 router = APIRouter(tags=["care"], responses={
@@ -20,16 +28,16 @@ PatientUser = Annotated[User, Depends(require_role(Role.PATIENT))]
 ProfessionalUser = Annotated[User, Depends(require_role(Role.PROFESSIONAL))]
 
 
-@router.get("/me", response_model=ProfileResponse)
+@router.get("/me", response_model=ProfessionalProfileResponse | ProfileResponse)
 def me(response: Response, user: Authenticated, db: Database):
     response.headers["Cache-Control"] = "no-store"
     return service.read_profile(db, user)
 
 
-@router.patch("/me", response_model=ProfileResponse)
+@router.patch("/me", response_model=ProfessionalProfileResponse | ProfileResponse)
 def update_me(data: ProfileUpdate, response: Response, user: Authenticated, db: Database):
     response.headers["Cache-Control"] = "no-store"
-    return service.update_profile(db, user, data.full_name)
+    return service.update_profile(db, user, data)
 
 
 @router.get("/me/professional-links", response_model=LinkPage)
@@ -57,7 +65,20 @@ def revoke_link(link_id: UUID, user: Authenticated, db: Database):
     return Response(status_code=204, headers={"Cache-Control": "no-store"})
 
 
+@router.post("/me/professional-links/{link_id}/reject", status_code=204)
+def reject_link(link_id: UUID, user: ProfessionalUser, db: Database):
+    service.transition_link(db, user, str(link_id), accept=False, reject=True)
+    return Response(status_code=204, headers={"Cache-Control": "no-store"})
+
+
 @router.get("/patients/{patient_id}", response_model=ProfileResponse)
 def patient(patient_id: UUID, response: Response, user: Authenticated, db: Database):
     response.headers["Cache-Control"] = "no-store"
     return service.read_patient(db, user, str(patient_id))
+
+
+@router.get("/patients", response_model=PatientPage)
+def patients(response: Response, user: ProfessionalUser, db: Database,
+             cursor: UUID | None = None, limit: Annotated[int, Query(ge=1, le=100)] = 20):
+    response.headers["Cache-Control"] = "no-store"
+    return service.list_patients(db, user, str(cursor) if cursor else None, limit)
