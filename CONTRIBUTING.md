@@ -19,8 +19,11 @@ nome. Nunca edite diretamente em `develop` ou `prod`.
 
 Abra PR de `feature/*` para `develop`. O único caminho normal de publicação é PR
 de `develop` para `prod`. PR para `prod` vindo de outra branch falha no CI. Não
-faça push ou merge sem autorização explícita do usuário. A pipeline não realiza
-merge, push ou deploy automático de feature ou `develop`.
+faça push ou merge manual sem autorização explícita do usuário. A automação
+aprovada em [CI-CD.md](CI-CD.md), após ativação manual do App e rulesets, cria PRs
+e solicita auto-merge nos dois caminhos, aguardando CI e revisões humanas.
+Nenhuma feature ou develop publica diretamente; só push em prod pode publicar
+após nova CI e aprovação do Environment production. Não há bypass ou autoaprovação.
 
 ## Commits
 
@@ -58,7 +61,9 @@ build e smoke test Docker. Não ignore falhas para liberar um PR.
 ## Proteção de branches
 
 Configure rulesets/branch protection em `develop` e `prod` para exigir PR,
-aprovação, checks CI, conversas resolvidas e branch atualizada. Bloqueie pushes
+aprovação, checks CI, conversas resolvidas e feature atualizada em develop. Bloqueie pushes
 diretos, force push, exclusão e bypass. Proteja `.github/workflows/**` e scripts
-de release com revisão. Em GitHub, `Backend CI` é o check de validação; o job de
+de release com revisão. Exija `Backend CI` e `Branch policy`; o job de
 produção não é requisito de PR, pois só roda em push para `prod`.
+Os JSONs e o motivo de prod não exigir sincronização reversa com develop estão
+em [CI-CD.md](CI-CD.md). Arquivos locais não ativam proteção no servidor.

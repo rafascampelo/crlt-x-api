@@ -9,6 +9,9 @@ from scripts.deploy_railway import (
     deployment_id_from_upload,
     main,
     railway,
+    validate_base_url,
+    validate_release_config,
+    verify_api_target,
     wait_for_deployment,
 )
 
@@ -85,3 +88,38 @@ def test_nonproduction_events_cannot_publish(monkeypatch, event, ref):
         with pytest.raises(RuntimeError, match="restricted"):
             main()
         cli.assert_not_called()
+
+
+@pytest.mark.parametrize('url', ['http://api.example.test', 'https://api.example.test/path',
+                               'https://api.example.test/#secret', 'https://user@api.example.test'])
+def test_invalid_public_url_is_rejected_before_deploy(url):
+    with pytest.raises(ValueError):
+        validate_base_url(url)
+
+
+def test_mysql_service_id_cannot_be_deployed_to():
+    metadata = {'id': 'project', 'services': {'edges': [
+        {'node': {'id': 'mysql', 'name': 'ctrl-x-mysql'}},
+    ]}, 'environments': {'edges': [{'node': {'id': 'production', 'name': 'production'}}]}}
+    with (
+        patch('scripts.deploy_railway.railway', return_value=json.dumps(metadata)),
+        pytest.raises(RuntimeError, match='Refusing deploy'),
+    ):
+        verify_api_target('project', 'mysql', 'production')
+
+
+def test_api_service_in_selected_environment_is_accepted():
+    metadata = {'id': 'project', 'services': {'edges': [
+        {'node': {'id': 'api', 'name': 'ctrl-x-api'}},
+    ]}, 'environments': {'edges': [{'node': {'id': 'environment', 'name': 'production'}}]}}
+    with patch('scripts.deploy_railway.railway', return_value=json.dumps(metadata)):
+        verify_api_target('project', 'api', 'environment')
+
+
+def test_release_without_migration_hook_is_rejected(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    (tmp_path / 'railway.json').write_text(json.dumps({
+        'build': {'builder': 'DOCKERFILE'}, 'deploy': {'healthcheckPath': '/health'},
+    }), encoding='utf-8')
+    with pytest.raises(ValueError, match='controlled migration'):
+        validate_release_config()

@@ -21,10 +21,10 @@ RUN python -m pip install -r requirements.lock && python -m pip check
 COPY app ./app
 COPY alembic ./alembic
 COPY alembic.ini ./
-COPY scripts/__init__.py scripts/ci_database.py ./scripts/
+COPY scripts/__init__.py scripts/ci_database.py scripts/migrate_production.py scripts/start_api.py ./scripts/
 
 USER 10001:10001
 EXPOSE 8000
 HEALTHCHECK --interval=10s --timeout=5s --start-period=10s --retries=6 \
     CMD python -c "import json,os,urllib.request; r=urllib.request.urlopen('http://127.0.0.1:'+os.getenv('PORT','8000')+'/health',timeout=3); assert r.status==200 and json.load(r)=={'status':'ok'}"
-CMD ["sh", "-c", "exec python -m uvicorn app.main:app --host 0.0.0.0 --port ${PORT:-8000} --no-access-log"]
+CMD ["python", "-m", "scripts.start_api"]
