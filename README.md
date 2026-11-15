@@ -1,5 +1,12 @@
 # Ctrl X Backend
 
+## Perfis e vínculos profissionais
+
+O incremento P0 de perfis e vínculos está implementado. Os contratos para o
+frontend estão em [docs/frontend-contracts.md](docs/frontend-contracts.md).
+A migration `0004_professional_links` adiciona consentimento, histórico de vínculos,
+restrição atômica de um profissional ativo por paciente e auditoria de acesso.
+
 ## Autenticação — CX-01
 
 Configure `DATABASE_URL`, `SECRET_KEY` aleatória (mínimo 32 caracteres),
@@ -47,7 +54,7 @@ somente a sessão apresentada. Reutilizar seu JWT ainda não expirado retorna
 No frontend use `fetch(url, {credentials: "include", ...})`, inclusive em login,
 `/me` e logout, e `Content-Type: application/json` ao enviar JSON. O navegador
 adiciona `Origin`. Ao receber 401, solicite novo login. Tokens permanecem no
-cookie HttpOnly. CORS permite GET/POST e Content-Type com credenciais apenas
+cookie HttpOnly. CORS permite GET/POST/PATCH e Content-Type com credenciais apenas
 para as origens configuradas, e expõe `Retry-After` ao frontend.
 
 Frontend e API precisam compartilhar o mesmo site e esquema HTTPS em produção,
@@ -196,8 +203,8 @@ O teste concorrente reserva tentativas por conexões independentes para verifica
 o bloqueio entre instâncias. Consulte [CI-CD.md](CI-CD.md) para a configuração
 da CI. A validação MySQL e o build Docker dependem do daemon local.
 
-Em 15/11/2026, a execução local encontrou Docker Desktop parado, erro 500 no
-engine Linux e `wsl --status` informou que WSL está ausente. Assim, migrations
-e concorrência em MySQL 8.4 real, build e smoke test Docker permanecem pendentes.
-Os testes SQLite e a geração SQL offline de migrations cobrem apenas parte da
-validação.
+Em 15/11/2026, migrations e testes de integração foram executados em MySQL
+8.4.13 descartável. Como o Windows bloqueou a porta 3306, o executor Python
+compartilhou a rede do container MySQL, preservando a identidade isolada
+`127.0.0.1:3306/ctrlx_ci`. Build e smoke test da imagem de produção permanecem
+pendentes.

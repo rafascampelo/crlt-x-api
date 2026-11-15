@@ -1,6 +1,7 @@
 # Desenho inicial da API
 
-Proposta para revisão, sem rotas novas implementadas. Base `/api/v1`, JSON,
+Proposta de evolução. Consulte `frontend-contracts.md` para endpoints já implementados.
+Base `/api/v1`, JSON,
 UUIDs públicos e timestamps ISO 8601 em UTC. `/health` permanece liveness,
 sem dependência de disponibilidade do banco.
 

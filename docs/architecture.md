@@ -1,7 +1,8 @@
 # Base do backend
 
-Status: desenho inicial; somente `/health` está implementado. Nenhum modelo,
-acesso ao banco, autenticação ou endpoint de negócio foi criado nesta etapa.
+Status atual inclui autenticação, perfis próprios, vínculos consentidos e leitura
+autorizada de pacientes. Consulte `frontend-contracts.md` para as rotas implementadas.
+As demais seções descrevem a evolução prevista do P0.
 
 ## Produto e implantação
 
