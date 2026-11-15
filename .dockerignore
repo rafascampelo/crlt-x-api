@@ -1,0 +1,13 @@
+**
+!Dockerfile
+!requirements.lock
+!app/
+!app/**
+!alembic/
+!alembic/**
+!alembic.ini
+!scripts/
+!scripts/__init__.py
+!scripts/ci_database.py
+**/__pycache__
+**/*.pyc

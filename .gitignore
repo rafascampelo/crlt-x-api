@@ -5,3 +5,7 @@ __pycache__/
 *.py[cod]
 private_uploads/
 .coverage
+.ruff_cache/
+reports/
+release.tar.gz
+release.tar.gz.sha256
