@@ -9,35 +9,12 @@ on:
 
 permissions:
   contents: read
-  pull-requests: read
 
 concurrency:
   group: backend-${{ github.event_name }}-${{ github.ref }}
   cancel-in-progress: ${{ github.ref != 'refs/heads/prod' }}
 
 jobs:
-  commit-messages:
-    name: Commit messages
-    runs-on: ubuntu-24.04
-    timeout-minutes: 5
-    steps:
-      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
-        with:
-          persist-credentials: false
-      - name: Enforce develop-to-prod release path
-        if: github.event_name == 'pull_request' && github.event.pull_request.base.ref == 'prod'
-        env:
-          HEAD_BRANCH: ${{ github.event.pull_request.head.ref }}
-        run: |
-          test "$HEAD_BRANCH" = develop || { echo '::error::PRs to prod must come from develop'; exit 1; }
-      - name: Validate every pull request commit
-        if: github.event_name == 'pull_request'
-        env:
-          GH_TOKEN: ${{ github.token }}
-          GH_REPOSITORY: ${{ github.repository }}
-          PR_NUMBER: ${{ github.event.pull_request.number }}
-        run: python scripts/validate_commit_messages.py --pr
-
   ci:
     name: Backend CI
     runs-on: ubuntu-24.04

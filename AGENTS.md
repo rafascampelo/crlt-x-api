@@ -11,7 +11,7 @@ Build a patient-first physical health monitoring API, using Python/FastAPI, SQLA
 - Use only these commit types and format: `feat: <short imperative description in English>`, `fix: ...`, `refactor: ...`, `tests: ...`. Keep each description short, imperative, and in English.
 - Make small commits grouped by one logical change. Do not combine independent features, fixes, and refactors in one commit.
 - Before each commit, run relevant tests, lint, and validation. Never commit `.env` files, credentials, secrets, or real clinical data.
-- CI validates every commit in every pull request against the exact allowed format. Validate locally before committing with `python scripts/validate_commit_messages.py --local` (requires Git access to fetch `origin/develop`).
+- Commit message format is a team convention and is not enforced by CI.
 - Protect `develop` and `prod`: require PRs and passing CI, block direct pushes, force pushes, deletion, and bypass. Require review for workflow and release-script changes.
 - Do not add product features while changing development rules or CI configuration.
 

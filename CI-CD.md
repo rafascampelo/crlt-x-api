@@ -29,11 +29,9 @@ implementação.
 | PR com destino `prod` | Sim | Nunca |
 | Push em `prod` | Sim, novamente no SHA do push | Somente após CI verde e Environment production liberado |
 
-Em PR, o job **Commit messages** consulta a lista completa de commits do PR na
-API do GitHub e aceita apenas `feat:`, `fix:`, `refactor:` e `tests:` com assunto
-imperativo curto em inglês. Falha se a API não estiver acessível ou se qualquer
-commit violar o padrão. PRs para `prod` também falham se a branch de origem não
-for `develop`. PRs e pushes de feature não iniciam publicação.
+PRs para `prod` falham se a branch de origem não for `develop`. PRs e pushes de
+feature não iniciam publicação. Mensagens seguem a convenção de CONTRIBUTING.md;
+nenhum step do workflow as valida.
 
 Não há `workflow_dispatch`, `pull_request_target`, publicação em tags ou workflow
 separado que possa reutilizar um resultado antigo de CI. Não há filtros por
@@ -83,9 +81,7 @@ com revisão; os arquivos executados na produção vêm de `prod`.
 
 Aplicar branch protection/rulesets em **develop e prod**: exigir PR, aprovação,
 conversas resolvidas, branch atualizada e o status obrigatório **Backend CI**.
-Exigir também **Commit messages** para PRs e selecionar ambos os checks após o
-primeiro run. Como a proteção exige PR, o check de mensagens sempre tem evento PR.
-Selecionar o check exato após o primeiro run. Bloquear force push, exclusão e
+Selecionar **Backend CI** após o primeiro run. Bloquear force push, exclusão e
 bypass por administradores/automação quando possível. Não exigir o job
 `Backend production` como check de merge, pois ele não roda em PR.
 Se ativar merge queue, adicionar suporte e validação de `merge_group` antes de usar.

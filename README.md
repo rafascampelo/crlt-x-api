@@ -11,7 +11,6 @@ Branches feature e `develop` executam CI sem deploy.
 
 Commits aceitos: `feat`, `fix`, `refactor` ou `tests`, seguidos por uma descrição
 curta, imperativa e em inglês, por exemplo `feat: add clinical record form`.
-Valide as mensagens locais com `python scripts/validate_commit_messages.py --local`.
 Consulte [CONTRIBUTING.md](CONTRIBUTING.md) antes de iniciar uma mudança.
 
 ## Visão do produto

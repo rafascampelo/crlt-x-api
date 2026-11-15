@@ -36,16 +36,8 @@ tests: cover clinical record permissions
 
 Faça commits pequenos, cada um com uma mudança lógica. Não misture funcionalidade,
 correção e refatoração independentes. Antes de cada commit, execute os testes,
-lint e validações relevantes e verifique:
-
-```powershell
-python scripts/validate_commit_messages.py --local
-```
-
-O modo local usa `git` e compara todos os commits da branch com o merge-base da
-`develop` remota. Atualize `origin/develop` antes da validação. Em PR, a CI consulta
-a API GitHub e verifica todas as mensagens associadas ao PR, não somente o último
-commit; a ação falha se a consulta completa não puder ser feita.
+lint e validações relevantes. O formato acima é uma convenção da equipe; a CI
+não bloqueia commits com base em suas mensagens.
 
 Nunca inclua `.env`, credenciais, tokens, segredos, dumps ou dados clínicos reais.
 Use somente dados sintéticos nos testes.
@@ -57,7 +49,6 @@ No mínimo, para este backend:
 ```powershell
 python -m ruff check .
 python -m pytest
-python scripts/validate_commit_messages.py --local
 ```
 
 Execute também as validações relevantes à mudança, como migrações Alembic e

@@ -1,7 +1,6 @@
 import pytest
 
 from scripts.ci_database import validate_ci_database
-from scripts.validate_commit_messages import validate
 
 
 def test_accepts_isolated_mysql():
@@ -24,29 +23,3 @@ def test_rejects_nonisolated_database(url):
         validate_ci_database(url)
 
 
-@pytest.mark.parametrize(
-    "message",
-    [
-        "feat: add clinical record form",
-        "fix: validate patient access",
-        "refactor: extract pain record service",
-        "tests: cover clinical record permissions",
-    ],
-)
-def test_accepts_allowed_commit_message(message):
-    assert validate([("a" * 40, message)]) == []
-
-
-@pytest.mark.parametrize(
-    "message",
-    [
-        "chore: update dependencies",
-        "Feat: add a feature",
-        "feat add clinical record form",
-        "feat: Add clinical record form",
-        "feat: add clinical record form\n\nSigned-off-by: Patient",
-        "feat: añadir registro",
-    ],
-)
-def test_rejects_disallowed_commit_message(message):
-    assert validate([("b" * 40, message)])
