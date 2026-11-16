@@ -45,6 +45,16 @@ jobs:
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
           node-version: '22'
+      - name: Validate production configuration before migrations
+        working-directory: release
+        env:
+          RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
+          RAILWAY_PROJECT_ID: ${{ vars.RAILWAY_PROJECT_ID }}
+          RAILWAY_ENVIRONMENT_ID: ${{ vars.RAILWAY_ENVIRONMENT_ID }}
+          RAILWAY_SERVICE_ID: ${{ vars.RAILWAY_SERVICE_ID }}
+          RAILWAY_MIGRATIONS_SERVICE_ID: ${{ vars.RAILWAY_MIGRATIONS_SERVICE_ID }}
+          BACKEND_PRODUCTION_URL: ${{ vars.BACKEND_PRODUCTION_URL }}
+        run: python -m scripts.release_preflight
       - name: Install pinned Railway CLI
         run: npm install --global @railway/cli@5.74.0
       - name: Apply and verify migrations inside Railway

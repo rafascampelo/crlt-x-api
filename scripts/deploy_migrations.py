@@ -49,7 +49,9 @@ def main():
     project = os.environ["RAILWAY_PROJECT_ID"]
     service = os.environ["RAILWAY_MIGRATIONS_SERVICE_ID"]
     environment = os.environ["RAILWAY_ENVIRONMENT_ID"]
-    if any(not re.fullmatch(UUID, value) for value in (project, service, environment)):
+    if any(not re.fullmatch(UUID, value) for value in (
+        project, service, environment, os.environ["RAILWAY_SERVICE_ID"],
+    )):
         raise ValueError("Railway identifiers must be UUIDs")
     if service == os.environ["RAILWAY_SERVICE_ID"]:
         raise ValueError("Migration service must be separate from API")

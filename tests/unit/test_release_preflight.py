@@ -1,0 +1,48 @@
+import pytest
+
+from scripts.release_preflight import REQUIRED, validate_config
+
+
+def test_reports_every_missing_setting_without_values(monkeypatch):
+    for name in REQUIRED:
+        monkeypatch.delenv(name, raising=False)
+    with pytest.raises(ValueError) as error:
+        validate_config()
+    for name in REQUIRED:
+        assert f"{name} unavailable" in str(error.value)
+    assert "Environment secrets" in str(error.value)
+    assert "Environment variables" in str(error.value)
+
+
+@pytest.fixture
+def configured(monkeypatch):
+    for index, name in enumerate(REQUIRED):
+        monkeypatch.setenv(name, f"00000000-0000-0000-0000-{index:012d}")
+    monkeypatch.setenv("BACKEND_PRODUCTION_URL", "https://api.example.test")
+
+
+def test_valid_configuration(configured):
+    validate_config()
+
+
+@pytest.mark.parametrize("name", [name for name in REQUIRED if name.endswith("_ID")])
+def test_invalid_identifiers_are_redacted(configured, monkeypatch, name):
+    monkeypatch.setenv(name, "sensitive-invalid-value")
+    with pytest.raises(ValueError) as error:
+        validate_config()
+    assert name in str(error.value)
+    assert "sensitive-invalid-value" not in str(error.value)
+
+
+def test_same_service_rejected(configured, monkeypatch):
+    import os
+    monkeypatch.setenv("RAILWAY_MIGRATIONS_SERVICE_ID", os.environ["RAILWAY_SERVICE_ID"])
+    with pytest.raises(ValueError, match="separate"):
+        validate_config()
+
+
+def test_invalid_url_redacted(configured, monkeypatch):
+    monkeypatch.setenv("BACKEND_PRODUCTION_URL", "https://user:private@api.example.test")
+    with pytest.raises(ValueError) as error:
+        validate_config()
+    assert "private" not in str(error.value)

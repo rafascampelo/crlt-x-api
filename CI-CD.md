@@ -1,5 +1,44 @@
 # CI/CD do backend: GitHub Actions e Railway
 
+## Diagnóstico antes das migrations
+
+O passo `Validate production configuration before migrations` executa
+`python -m scripts.release_preflight` sem acessar a rede. Lista todas as entradas
+ausentes, valida UUIDs, serviços distintos e URL HTTPS antes de instalar a CLI
+ou publicar migrations. Não imprime valores. Presença não comprova autenticação.
+
+| Configuração | Tipo | Local |
+|---|---|---|
+| RAILWAY_TOKEN | Secret | GitHub Environment production |
+| RAILWAY_PROJECT_ID | Variable | GitHub Environment production |
+| RAILWAY_ENVIRONMENT_ID | Variable | GitHub Environment production |
+| RAILWAY_SERVICE_ID | Variable | GitHub Environment production |
+| RAILWAY_MIGRATIONS_SERVICE_ID | Variable | GitHub Environment production |
+| BACKEND_PRODUCTION_URL | Variable | GitHub Environment production |
+
+No repositório `rafascampelo/crlt-x-api`, abrir Settings → Environments → production.
+Se `RAILWAY_TOKEN unavailable` aparecer, conferir o secret nesse environment e
+repositório, o nome exato e se foi cadastrado incorretamente como variable.
+Um token no `.env` local ou nas Variables do Railway não chega ao GitHub Actions.
+O erro original comprova que o processo recebeu token vazio/ausente; a causa da
+configuração remota ainda precisa ser confirmada no painel autenticado.
+
+Criar um Project Token nas configurações do projeto Railway, associado ao
+environment production, e salvar como `RAILWAY_TOKEN`. Tokens de conta/workspace
+usam `RAILWAY_API_TOKEN` e não são intercambiáveis com esse contrato. Conferir
+projeto e environment do token. Os subprocessos herdam o ambiente do job.
+Copiar IDs reais nas configurações do projeto, environment e de cada serviço
+(ou pela opção Copy ID do painel); não usar nomes no lugar dos UUIDs. Copiar
+a origem HTTPS real da API em Networking para BACKEND_PRODUCTION_URL.
+
+Após corrigir a configuração, integrar a correção por PR feature → develop → prod.
+O push em prod inicia a validação, migrations e API. Para repetir um run que falhou
+somente por configuração ausente, usar Re-run all jobs no SHA atual de prod;
+releases ultrapassadas são recusadas. Falha durante DDL exige inspeção antes de
+repetir. PRs e merges continuam manuais, sem workflows promote.
+
+Referência: [autenticação da CLI Railway](https://docs.railway.com/cli).
+
 ## Job exclusivo de Database Migrations
 
 O fluxo de produção é **validate → database-migrations → production**.
