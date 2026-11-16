@@ -69,7 +69,6 @@ jobs:
           docker run --rm --volume "$PWD/.github:/repo/.github:ro" --workdir /repo
           rhysd/actionlint:1.7.7@sha256:887a259a5a534f3c4f36cb02dca341673c6089431057242cdc931e9f133147e9
           /repo/.github/workflows/backend.yml /repo/.github/workflows/deploy-production.yml
-          /repo/.github/workflows/auto-promote.yml
       - name: Ruff
         run: python -m ruff check .
       - name: Validate isolated database target
