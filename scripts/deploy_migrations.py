@@ -1,4 +1,8 @@
-"""Upload validated release to the private migration service, never the API or MySQL."""
+"""Legacy separate-service publisher; NOT a one-off task runner.
+
+The current workflow uses the API's native pre-deploy hook instead. Never remove
+the equal-service guard: this uploader replaces the destination with a sentinel.
+"""
 
 import json
 import os
@@ -49,7 +53,9 @@ def main():
     project = os.environ["RAILWAY_PROJECT_ID"]
     service = os.environ["RAILWAY_MIGRATIONS_SERVICE_ID"]
     environment = os.environ["RAILWAY_ENVIRONMENT_ID"]
-    if any(not re.fullmatch(UUID, value) for value in (project, service, environment)):
+    if any(not re.fullmatch(UUID, value) for value in (
+        project, service, environment, os.environ["RAILWAY_SERVICE_ID"],
+    )):
         raise ValueError("Railway identifiers must be UUIDs")
     if service == os.environ["RAILWAY_SERVICE_ID"]:
         raise ValueError("Migration service must be separate from API")

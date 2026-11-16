@@ -100,16 +100,15 @@ def test_workflow_blocks_api_until_migrations_succeed():
     yaml = pytest.importorskip("yaml")
     workflow = yaml.safe_load(Path(".github/workflows/deploy-production.yml").read_text())
     jobs = workflow["jobs"]
-    assert jobs["database-migrations"]["needs"] == "validate"
-    assert jobs["production"]["needs"] == "database-migrations"
+    assert jobs["production"]["needs"] == "validate"
     assert "if" not in jobs["production"]  # default success() prevents deploy on failed migration
     assert workflow["concurrency"]["cancel-in-progress"] is False
 
 
-def test_api_predeploy_only_checks_schema():
+def test_api_predeploy_runs_controlled_migration():
     config = json.loads(Path("railway.json").read_text())
     assert config["deploy"]["preDeployCommand"] == [
-        "python -m scripts.db db:status --require-current",
+        "python -m scripts.db db:migrate",
     ]
 
 

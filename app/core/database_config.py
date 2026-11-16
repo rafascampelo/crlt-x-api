@@ -2,7 +2,8 @@
 
 from pydantic import SecretStr, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
-from sqlalchemy.engine import URL
+from sqlalchemy.engine import URL, make_url
+from sqlalchemy.exc import ArgumentError
 
 
 class DatabaseSettings(BaseSettings):
@@ -14,9 +15,26 @@ class DatabaseSettings(BaseSettings):
     db_host: str | None = None
     db_port: int | None = None
     db_name: str | None = None
+    mysqlhost: str | None = None
+    mysqlport: int | None = None
+    mysqluser: str | None = None
+    mysqlpassword: SecretStr | None = None
+    mysqldatabase: str | None = None
+    mysql_url: SecretStr | None = None
 
     @model_validator(mode="after")
     def resolve_database_url(self):
+        legacy = (self.db_user, self.db_password, self.db_host, self.db_port, self.db_name)
+        native = (self.mysqluser, self.mysqlpassword, self.mysqlhost,
+                  self.mysqlport, self.mysqldatabase)
+        if not any(value is not None for value in legacy):
+            if self.database_url is None and any(value is not None for value in native):
+                if any(value is None or value == "" for value in native):
+                    raise ValueError("All MYSQLUSER, MYSQLPASSWORD, MYSQLHOST, MYSQLPORT "
+                                     "and MYSQLDATABASE are required")
+                self.db_user, self.db_password, self.db_host, self.db_port, self.db_name = native
+            elif self.database_url is None:
+                self.database_url = self.mysql_url
         parts = (self.db_user, self.db_password, self.db_host, self.db_port, self.db_name)
         if any(value is not None for value in parts):
             if any(value is None or value == "" for value in parts):
@@ -30,5 +48,13 @@ class DatabaseSettings(BaseSettings):
             )
             self.database_url = SecretStr(url.render_as_string(hide_password=False))
         elif self.database_url is None or not self.database_url.get_secret_value():
-            raise ValueError("Configure DATABASE_URL or all five DB_* variables")
+            raise ValueError("Configure DATABASE_URL, all MYSQL* variables, MYSQL_URL or DB_*")
+        try:
+            url = make_url(self.database_url.get_secret_value())
+            if url.drivername == "mysql":
+                self.database_url = SecretStr(
+                    url.set(drivername="mysql+pymysql").render_as_string(hide_password=False)
+                )
+        except (ArgumentError, ValueError, TypeError):
+            raise ValueError("Invalid database URL") from None
         return self
