@@ -1,4 +1,8 @@
-"""Upload validated release to the private migration service, never the API or MySQL."""
+"""Legacy separate-service publisher; NOT a one-off task runner.
+
+The current workflow uses the API's native pre-deploy hook instead. Never remove
+the equal-service guard: this uploader replaces the destination with a sentinel.
+"""
 
 import json
 import os

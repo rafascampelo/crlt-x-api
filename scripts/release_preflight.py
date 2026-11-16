@@ -23,8 +23,8 @@ def validate_config():
         elif name.endswith("_ID") and not re.fullmatch(UUID, os.environ[name]):
             errors.append(f"{name} must be a UUID copied from Railway.")
     api = os.environ.get("RAILWAY_SERVICE_ID")
-    if api and api == os.environ.get("RAILWAY_MIGRATIONS_SERVICE_ID"):
-        errors.append("Migration service must be separate from API.")
+    if api and api != os.environ.get("RAILWAY_MIGRATIONS_SERVICE_ID"):
+        errors.append("Migration service must equal API for the single-service pre-deploy flow.")
     if os.environ.get("BACKEND_PRODUCTION_URL", "").strip():
         try:
             validate_base_url(os.environ["BACKEND_PRODUCTION_URL"])

@@ -26,7 +26,7 @@ def validate_release_config():
     config = json.loads(Path("railway.json").read_text(encoding="utf-8"))
     if (config.get("build", {}).get("builder") != "DOCKERFILE"
             or config.get("deploy", {}).get("preDeployCommand") != [
-                "python -m scripts.db db:status --require-current"
+                "python -m scripts.db db:migrate"
             ] or config.get("deploy", {}).get("healthcheckPath") != "/health"):
         raise ValueError("Release must include the controlled migration and healthcheck configuration")
 

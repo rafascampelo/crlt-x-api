@@ -19,6 +19,7 @@ def configured(monkeypatch):
     for index, name in enumerate(REQUIRED):
         monkeypatch.setenv(name, f"00000000-0000-0000-0000-{index:012d}")
     monkeypatch.setenv("BACKEND_PRODUCTION_URL", "https://api.example.test")
+    monkeypatch.setenv("RAILWAY_MIGRATIONS_SERVICE_ID", "00000000-0000-0000-0000-000000000003")
 
 
 def test_valid_configuration(configured):
@@ -34,10 +35,9 @@ def test_invalid_identifiers_are_redacted(configured, monkeypatch, name):
     assert "sensitive-invalid-value" not in str(error.value)
 
 
-def test_same_service_rejected(configured, monkeypatch):
-    import os
-    monkeypatch.setenv("RAILWAY_MIGRATIONS_SERVICE_ID", os.environ["RAILWAY_SERVICE_ID"])
-    with pytest.raises(ValueError, match="separate"):
+def test_different_service_rejected(configured, monkeypatch):
+    monkeypatch.setenv("RAILWAY_MIGRATIONS_SERVICE_ID", "11111111-1111-1111-1111-111111111111")
+    with pytest.raises(ValueError, match="equal"):
         validate_config()
 
 
